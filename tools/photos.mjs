@@ -20,7 +20,7 @@ const today = Math.floor(Date.now() / 864e5);
 
 let db = { v: 1, p: {}, t: {} };
 try { db = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
-db.p = db.p || {}; db.t = db.t || {};
+db.p = db.p || {}; db.t = db.t || {}; db.f = db.f || {};
 // Lo que ya encontraron los otros robots (o la corrida anterior) no se vuelve a buscar
 const known = {};
 for (const f of fs.readdirSync('.').filter(f => /^photos(-\d+)?\.json$/.test(f) && f !== FILE)) {
@@ -38,6 +38,22 @@ async function getJSON(u, tries = 3) {
     } catch { await sleep(5000); }
   }
   return null;
+}
+// Segunda fuente gratis: FotMob (fotos uniformes de casi todos los futbolistas profesionales)
+async function fotmob(name, team) {
+  const j = await getJSON('https://www.fotmob.com/api/search/suggest?lang=en&term=' + encodeURIComponent(name), 2);
+  if (!j) return null;
+  const opts = [];
+  const add = (id, nm, tm) => { if (id) opts.push({ id: String(id), name: nm || '', team: tm || '' }); };
+  (Array.isArray(j) ? j : [j]).forEach(g => {
+    (g.suggestions || []).forEach(x => { if (x.type === 'player') add(x.id, x.name, x.teamName); });
+    (g.squadMemberSuggest || []).forEach(b => (b.options || []).forEach(o => add(o.payload?.id || String(o.text || '').split('|')[1], String(o.text || '').split('|')[0], o.payload?.teamName)));
+  });
+  if (!opts.length) return '';
+  const tw = norm(team).split(' ').filter(w => w.length > 2), nw = norm(name).split(' ');
+  const last = nw[nw.length - 1];
+  const pick = opts.find(o => tw.some(t => norm(o.team).includes(t)) && norm(o.name).includes(last)) || (opts.length === 1 && norm(opts[0].name).includes(last) ? opts[0] : null);
+  return pick ? 'f' + pick.id : '';
 }
 // Guarda solo el nombre del archivo para que photos.json pese poco
 const enc = u => {
@@ -103,10 +119,22 @@ outer: for (const [team, list] of byTeam) {
         if (pl && (pl.strCutout || pl.strThumb)) { u = pl.strCutout || pl.strThumb; break; }
       }
     }
-    db.p[id] = enc(u); db.t[id] = today; done++;
+    let code = enc(u);
+    if (!code) { const f = await fotmob(p.name, p.team); await sleep(1100); if (f) code = f; db.f[id] = today; }
+    db.p[id] = code; db.t[id] = today; done++;
     if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done}`); lastCommit = Date.now(); }
   }
 }
-commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done}`);
+// 3. Los que ya se buscaron en TheSportsDB sin suerte: probar FotMob (más rápido, ~1 por segundo)
+let fm = 0;
+for (const [id, p] of players) {
+  if (Date.now() - START > MAXMS) break;
+  if (hash(p.team) % SHARDS !== SHARD || known[id] || db.p[id] !== '' || db.f[id]) continue;
+  const f = await fotmob(p.name, p.team); await sleep(1100);
+  if (f === null) continue;
+  db.f[id] = today; if (f) { db.p[id] = f; fm++; }
+  if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done} (+${fm} FotMob)`); lastCommit = Date.now(); }
+}
+commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done} (+${fm} FotMob)`);
 const found = Object.values(db.p).filter(Boolean).length;
 console.log(`Listo: ${done} revisados en esta corrida · ${found} con foto de ${Object.keys(db.p).length}`);
