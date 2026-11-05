@@ -498,6 +498,9 @@ main::-webkit-scrollbar{display:none}
 .tbl.st td:first-child b{font-size:14px}
 .zones{gap:10px 16px;font-size:12.5px;margin:2px 2px 16px}
 .zones i{width:12px;height:12px;border-radius:3px}
+.gl{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)} .gl:last-child{border-bottom:0}
+.gl .t{width:38px;flex:none;color:var(--faint);font-weight:700;font-size:12.5px} .gl .tx{display:flex;flex-direction:column;min-width:0} .gl b{font-weight:700} .gl small{color:var(--muted);font-size:12px}
+.gl .av{--s:36px}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -1146,7 +1149,9 @@ function gdResumen(g,d,kind){
     const who=(c,side,team,r)=>{const x=((side.leaders||[]).find(y=>y.name===c.name)||{}).leaders?.[0];if(!x)return '<div></div>';
       return `<div class="who ${r?'rt':''} ${myIds(g.key).has(String(x.athlete?.id))?'me':''}">${avatar(x.athlete?.displayName,x.athlete?.headshot?.href||headUrl(g.lg,x.athlete?.id))}<div class="nm"><b>${esc(x.athlete?.shortName||x.athlete?.displayName||'')}</b><span><em class="num">${esc(String(x.displayValue||'').split(',')[0])}</em><small>${esc(team.abbr)}</small></span></div></div>`};
     if(cats.length)h+=`<span class="flabel">Líderes</span><div class="infobox">${cats.map(c=>`<div class="ldr2"><div class="cat">${esc(LDR[c.name]||c.displayName||c.name)}</div><div class="pair">${who(c,A,g.away)}${who(c,H,g.home,true)}</div></div>`).join('')}</div>`}
-  if(kind==='soccer'){const ps=playsOf(d,kind).filter(p=>p.hi);if(ps.length)h+=`<span class="flabel">Goles</span><div class="infobox">${ps.map(p=>`<div class="r"><span>${esc(p.t)}</span><b>${esc(p.tx)}</b></div>`).join('')}</div>`}
+  if(kind==='soccer'){const gl=(d.keyEvents||[]).filter(e=>/goal/i.test((e.type?.type||'')+' '+(e.type?.text||''))&&!/disallow|cancel|anulad/i.test(e.type?.text||''));
+    if(gl.length)h+=`<span class="flabel">Goles</span><div class="infobox">${gl.map(e=>{const a=e.participants?.[0]?.athlete,as=e.participants?.[1]?.athlete;const tm=[g.home,g.away].find(t=>t.id===String(e.team?.id));const og=/own/i.test(e.type?.text||''),pen=/penal/i.test(e.type?.text||'');
+      return `<div class="gl"><span class="t">${esc(e.clock?.displayValue||'')}</span>${a?avatar(a.displayName,headUrl(g.lg,a.id),tm,36):logo(tm,36)}<span class="tx"><b>${esc(a?a.displayName:(e.text||'Gol'))}${og?' (autogol)':pen?' (penal)':''}</b>${as?`<small>Asistencia: ${esc(as.displayName)}</small>`:tm?`<small>${esc(tm.name)}</small>`:''}</span></div>`}).join('')}</div>`}
   const pc=(d.pickcenter||[])[0];const info=[];
   if(pc?.details)info.push(['Línea',pc.details]);if(pc?.overUnder)info.push(['Total (O/U)',pc.overUnder]);
   if(d.gameInfo?.venue?.fullName)info.push(['Estadio',d.gameInfo.venue.fullName+(d.gameInfo.venue.address?.city?', '+d.gameInfo.venue.address.city:'')]);
@@ -1402,7 +1407,7 @@ const ACT={
   ftab(d){S.ftab=d.v;renderMain();$('#view').scrollTop=0},
   sheetBack(){const p=S.stack.pop();if(!p)return closeSheet();S.sheet=p;renderSheet()},
   openPlayer(d){const kind={'600':'soccer','40':'basketball','20':'football','1':'baseball','70':'hockey'}[d.sport];const tn=norm(d.team||'');const L=(S.tidx||[]).filter(t=>!kind||LG[t.lg]?.kind===kind);
-    const t=L.find(t=>norm(t.full)===tn||norm(t.name)===tn)||L.find(t=>tn&&(norm(t.full).includes(tn)||tn.includes(norm(t.name))));
+    const CONT=['ucl','uel','uecl','lib','concachamp'];L.sort((a,b)=>CONT.includes(a.lg)-CONT.includes(b.lg));const t=L.find(t=>norm(t.full)===tn||norm(t.name)===tn)||L.find(t=>tn&&(norm(t.full).includes(tn)||tn.includes(norm(t.name))));
     if(!t)return toast('No encontré su equipo en las ligas de la app');ACT.openTeam({lg:t.lg,id:t.id,name:t.full||t.name,abbr:t.abbr,logo:t.logo,color:t.color,tab:'tr',hl:d.pid})},
   day(d){S.games.off=Number(d.v);loadDay(S.games.off).then(renderMain);renderMain()},
   lg(d){S.games.lg=d.v;loadDay(S.games.off).then(renderMain);renderMain()},
