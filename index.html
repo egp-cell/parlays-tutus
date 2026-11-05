@@ -508,7 +508,7 @@ main::-webkit-scrollbar{display:none}
 .tbl.st td:first-child b{font-size:13px;font-weight:600}
 .tbl.st td{font-size:13px;height:44px}
 .tbl.st td:first-child{min-width:150px;gap:7px}
-.rk{font-style:normal;font-size:8.5px;width:9px;flex:none;text-align:center;margin-left:-3px}
+.rk{font-style:normal;font-size:10px;width:10px;flex:none;text-align:center;margin-left:-3px}
 .rk.up{color:var(--win)} .rk.dn{color:var(--loss)}
 .cmpc{padding-bottom:10px}
 .cmpc .chip{padding:5px 12px 5px 5px}
@@ -818,8 +818,10 @@ function renderMode(){renderAct();$('#ttl').textContent={live:'Mis parlays',game
 function renderMain(){
   renderMode();renderTabs();
   const v=$('#view');if(S.mode==='loading'){v.innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';return}
+  if(S.tab==='games'){const d=document.querySelector('.stick .chips'),l=document.querySelector('.lchips');S.chipsScroll={d:d?d.scrollLeft:null,l:l?l.scrollLeft:null}}
   v.innerHTML=S.tab==='live'?viewLive():S.tab==='games'?viewGames():S.tab==='teams'?viewTeams():S.tab==='search'?viewSearch():viewLive();
-  if(S.tab==='games'){const c=document.querySelector('.stick .chips [aria-pressed="true"]');if(c)c.scrollIntoView({inline:'center',block:'nearest'});const c2=document.querySelector('.lchips [aria-pressed="true"]');if(c2)c2.scrollIntoView({inline:'nearest',block:'nearest'});const st=v.querySelector('.stick');if(st)v.style.setProperty('--sh',st.offsetHeight+'px')}
+  if(S.tab==='games'){const hc=(el,ctr)=>{if(!el)return;const p=el.parentElement;const want=ctr?el.offsetLeft-(p.clientWidth-el.offsetWidth)/2:Math.min(p.scrollLeft,el.offsetLeft-16);if(ctr||el.offsetLeft<p.scrollLeft||el.offsetLeft+el.offsetWidth>p.scrollLeft+p.clientWidth)p.scrollLeft=Math.max(0,want)};
+    if(!S.chipsSet||S.chipsSet!==S.games.off+'|'+S.games.lg){S.chipsSet=S.games.off+'|'+S.games.lg;hc(document.querySelector('.stick .chips [aria-pressed="true"]'),true);hc(document.querySelector('.lchips [aria-pressed="true"]'),false)}else{const sc=S.chipsScroll||{};const d=document.querySelector('.stick .chips'),l=document.querySelector('.lchips');if(d&&sc.d!=null)d.scrollLeft=sc.d;if(l&&sc.l!=null)l.scrollLeft=sc.l}const st=v.querySelector('.stick');if(st)v.style.setProperty('--sh',st.offsetHeight+'px')}
   else{const tp=document.querySelector('.top');if(tp){tp.classList.remove('up');tp.style.marginTop=''}}}
 
 function legIcon(L){const ev=S.ev[L.key];const g=ev&&ev.g;
