@@ -542,6 +542,7 @@ main::-webkit-scrollbar{display:none}
 .pn .bg em{position:absolute;right:-6px;top:-4px;font-style:normal;font-size:9.5px;font-weight:800;background:#0A0A0A;color:#fff;border-radius:6px;padding:0 3px}
 .pn .bc{position:absolute;top:-3px;left:-3px;width:9px;height:13px;border-radius:2px;background:#FFD60A;box-shadow:0 0 0 1.5px #0A0A0A} .pn .bc.r{background:#F04438}
 .pn .bs{position:absolute;bottom:-5px;right:-12px;font-style:normal;font-size:9.5px;font-weight:800;background:#F04438;color:#fff;border-radius:6px;padding:1px 4px}
+.pn .ba{position:absolute;bottom:-5px;left:-9px;font-style:normal;font-size:9.5px;font-weight:800;background:#3B82F6;color:#fff;border-radius:6px;padding:1px 4px}
 .bnr{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line)} .bnr:first-child{border-top:0}
 .bnr .jn{width:30px;height:30px;border-radius:50%;background:var(--surface-3);font-weight:800;font-size:12.5px;display:grid;place-items:center;flex:none}
 .bnr .tx{display:flex;flex-direction:column;min-width:0;flex:1} .bnr b{font-weight:700} .bnr small{font-size:12px;color:var(--muted)} .bnr .in{color:var(--win);font-weight:700}
@@ -1355,7 +1356,13 @@ const SCOLS={soccer:[['gamesPlayed','PJ'],['wins','G'],['ties','E'],['losses','P
   baseball:[['wins','G'],['losses','P'],['winPercent','%'],['gamesBehind','JD'],['streak','RACHA']],football:[['wins','G'],['losses','P'],['ties','E'],['winPercent','%'],['streak','RACHA']],hockey:[['gamesPlayed','PJ'],['wins','G'],['losses','P'],['otLosses','TE'],['points','PTS']]};
 async function loadStand(lg){const c=S.stand[lg];if(c&&Date.now()-c.at<10*6e4)return c;
   try{const j=await api.standings(lg);const groups=[];const walk=o=>{if(!o)return;if(o.standings&&o.standings.entries&&o.standings.entries.length)groups.push({name:o.name||o.abbreviation||'',entries:o.standings.entries});(o.children||[]).forEach(walk)};walk(j);
-    S.stand[lg]={groups,at:Date.now()}}catch(e){S.stand[lg]={groups:[],at:Date.now(),err:true}}return S.stand[lg]}
+    S.stand[lg]={groups,at:Date.now()};if(LG[lg].kind==='soccer'&&S.mode==='live')await loadRankMove(lg)}catch(e){S.stand[lg]={groups:[],at:Date.now(),err:true}}return S.stand[lg]}
+async function loadRankMove(lg){S.rmv=S.rmv||{};try{const j=await api.scoreboardRange(lg,ymd(-6),ymd(0));const last={};
+  (j.events||[]).map(e=>normEvent(lg,e)).filter(g=>g.state==='post').sort((x,y)=>new Date(x.date)-new Date(y.date)).forEach(g=>{last[g.home.id]={gf:g.home.score,ga:g.away.score};last[g.away.id]={gf:g.away.score,ga:g.home.score}});
+  const cmp=(x,y)=>y.p-x.p||y.gd-x.gd||y.gf-x.gf;const mv={};
+  S.stand[lg].groups.forEach(gr=>{const base=gr.entries.map(e=>({id:String(e.team?.id),p:stn(e,'points')||0,gd:stn(e,'pointDifferential')||0,gf:stn(e,'pointsFor')||0}));
+    const cur=[...base].sort(cmp);const prev=base.map(b=>{const l=last[b.id];return l?{id:b.id,p:b.p-(l.gf>l.ga?3:l.gf===l.ga?1:0),gd:b.gd-(l.gf-l.ga),gf:b.gf-l.gf}:b}).sort(cmp);
+    cur.forEach((b,i)=>{mv[b.id]=prev.findIndex(x=>x.id===b.id)-i})});S.rmv[lg]=mv}catch(e){}}
 const stEntry=(e,n)=>(e.stats||[]).find(x=>x.name===n||x.type===n);
 const stv=(e,n)=>{const x=stEntry(e,n);return x?(x.displayValue??x.value??'–'):'–'};
 const stn=(e,n)=>{const x=stEntry(e,n);return x?Number(x.value):NaN};
@@ -1366,7 +1373,7 @@ function standingsHtml(lg,hl){const st=S.stand[lg];if(!st)return '<div class="sk
   const html=st.groups.map(gr=>{const es=sortEntries(gr.entries,lg);
     return `${st.groups.length>1?`<span class="flabel">${esc(gr.name)}</span>`:''}<div class="tblw"><table class="tbl st"><thead><tr><th>Equipo</th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${es.map((e,i)=>{const t=e.team||{};
       const tt={id:String(t.id),abbr:t.abbreviation||'',name:t.shortDisplayName||t.name||t.displayName||'',color:'#'+String(t.color||'5a6577').replace('#',''),logo:(t.logos&&t.logos[0]&&t.logos[0].href)||''};
-      const zd=e.note&&e.note.description;const rk=stn(e,'rankChange');
+      const zd=e.note&&e.note.description;const rk=(S.rmv&&S.rmv[lg]&&S.rmv[lg][String(t.id)])||stn(e,'rankChange')||0;
       return `<tr class="${String(t.id)===String(hl)?'hl':''}${isFav(lg,tt.id)?' fv':''}" data-a="openTeam" data-lg="${lg}" data-id="${esc(tt.id)}" data-name="${esc(tt.name)}" data-abbr="${esc(tt.abbr)}" data-logo="${esc(tt.logo)}" data-color="${esc(tt.color)}"><td style="--z:${esc((zd&&zc.get(zd))||'transparent')}"><span class="pos">${i+1}</span><i class="rk ${rk>0?'up':rk<0?'dn':''}">${rk>0?'▲':rk<0?'▼':''}</i>${logo(tt,24)}<b>${esc(tt.name)}</b></td>${cols.map(c=>`<td>${esc(stv(e,c[0]))}</td>`).join('')}</tr>`}).join('')}</tbody></table></div>`}).join('');
   return html+(zc.size?`<div class="zones">${[...zc].map(([d,c])=>`<span><i style="background:${esc(c)}"></i>${esc(trZone(d))}</span>`).join('')}</div>`:'')}
 /* Tus selecciones dentro de un partido */
@@ -1457,8 +1464,8 @@ function lineupLines(r){const st=(r.roster||[]).filter(p=>p.starter);const fm=St
   let lines=[];if(fm.length&&fm.reduce((x,y)=>x+y,0)===out.length){let i=0;fm.forEach(n=>{lines.push(out.slice(i,i+n));i+=n})}
   else{const m={};out.forEach(p=>{const k=Math.floor(PRANK(ab(p)));(m[k]=m[k]||[]).push(p)});lines=Object.keys(m).sort().map(k=>m[k])}
   return [gk,...lines.map(l=>l.sort((a,b)=>PLAT(ab(a))-PLAT(ab(b))))]}
-function pNode(p,mine){const pl=p.plays||[];const goals=pl.filter(x=>x.scoringPlay&&!x.ownGoal).length;const rc=pl.some(x=>x.redCard),yc=pl.some(x=>x.yellowCard);const so=p.subbedOut?(pl.find(x=>x.substitution)?.clock?.displayValue||'↓'):'';
-  return `<div class="pn ${mine.has(String(p.athlete?.id))?'me':''}"><span class="jn">${esc(p.jersey||'')}${goals?`<i class="bg">${SVGI.goal}${goals>1?`<em>${goals}</em>`:''}</i>`:''}${rc?'<i class="bc r"></i>':yc?'<i class="bc"></i>':''}${so?`<i class="bs">${esc(so)}</i>`:''}</span><span class="pnm">${esc(lastNm(p.athlete))}</span></div>`}
+function pNode(p,mine){const pl=p.plays||[];const goals=pl.filter(x=>x.didScore&&!x.ownGoal).length,ast=pl.filter(x=>x.didAssist).length;const rc=pl.some(x=>x.redCard),yc=pl.some(x=>x.yellowCard);const so=p.subbedOut?(pl.find(x=>x.substitution)?.clock?.displayValue||'↓'):'';
+  return `<div class="pn ${mine.has(String(p.athlete?.id))?'me':''}"><span class="jn">${esc(p.jersey||'')}${goals?`<i class="bg">${SVGI.goal}${goals>1?`<em>${goals}</em>`:''}</i>`:''}${rc?'<i class="bc r"></i>':yc?'<i class="bc"></i>':''}${so?`<i class="bs">${esc(so)}</i>`:''}${ast?`<i class="ba">A${ast>1?ast:''}</i>`:''}</span><span class="pnm">${esc(lastNm(p.athlete))}</span></div>`}
 function gdLineup(s,g,d){const side=s.side==='home'?g.home:g.away;const mine=myIds(g.key);
   let h=`<div class="seg"><button data-a="gdside" data-v="away" aria-pressed="${s.side!=='home'}">${esc(g.away.name)}</button><button data-a="gdside" data-v="home" aria-pressed="${s.side==='home'}">${esc(g.home.name)}</button></div>`;
   const r=(d.rosters||[]).find(x=>String(x.team?.id)===side.id||x.team?.abbreviation===side.abbr);
@@ -1466,8 +1473,8 @@ function gdLineup(s,g,d){const side=s.side==='home'?g.home:g.away;const mine=myI
   const lines=lineupLines(r);
   h+=`<div class="pitch"><span class="fm">${logo(side,22)}${esc(r.formation||'')}</span><i class="pbox"></i><i class="parc"></i>${lines.map((l,i)=>`<div class="pline ${i===0?'gk':''}">${l.map(p=>pNode(p,mine)).join('')}</div>`).join('')}</div>`;
   const bench=(r.roster||[]).filter(p=>!p.starter).sort((a,b)=>(b.subbedIn?1:0)-(a.subbedIn?1:0));
-  if(bench.length)h+=`<span class="flabel">Suplentes</span><div class="tcard">${bench.map(p=>{const pl=p.plays||[];const inn=p.subbedIn?(pl.find(x=>x.substitution)?.clock?.displayValue||''):'';const forP=p.subbedInFor?.athlete;const goals=pl.filter(x=>x.scoringPlay&&!x.ownGoal).length;
-    return `<div class="bnr ${mine.has(String(p.athlete?.id))?'me':''}"><span class="jn">${esc(p.jersey||'')}</span><span class="tx"><b>${esc(p.athlete?.displayName||'')}</b><small>${esc(p.position?.abbreviation||'')}${inn?` · <span class="in">Entró ${esc(inn)}</span>${forP?' por '+esc(forP.displayName||forP.shortName||''):''}`:''}</small></span><span class="ics">${goals?SVGI.goal:''}${pl.some(x=>x.redCard)?SVGI.rc:pl.some(x=>x.yellowCard)?SVGI.yc:''}</span></div>`}).join('')}</div>`;
+  if(bench.length)h+=`<span class="flabel">Suplentes</span><div class="tcard">${bench.map(p=>{const pl=p.plays||[];const inn=p.subbedIn?(pl.find(x=>x.substitution)?.clock?.displayValue||''):'';const forP=p.subbedInFor?.athlete;const goals=pl.filter(x=>x.didScore&&!x.ownGoal).length;
+    return `<div class="bnr ${mine.has(String(p.athlete?.id))?'me':''}"><span class="jn">${esc(p.jersey||'')}</span><span class="tx"><b>${esc(p.athlete?.displayName||'')}</b><small>${p.position?.abbreviation&&p.position.abbreviation!=='SUB'?esc(p.position.abbreviation)+(inn?' · ':''):''}${inn?`<span class="in">Entró ${esc(inn)}</span>${forP?' por '+esc(forP.displayName||forP.shortName||''):''}`:''}</small></span><span class="ics">${goals?SVGI.goal:''}${pl.some(x=>x.redCard)?SVGI.rc:pl.some(x=>x.yellowCard)?SVGI.yc:''}</span></div>`}).join('')}</div>`;
   return h}
 /* Tabla: orden, colores claros y textos en español */
 function sortEntries(entries,lg){return [...entries].sort((a,b)=>{const ra=stn(a,'rank'),rb=stn(b,'rank');if(isFinite(ra)&&isFinite(rb)&&ra!==rb)return ra-rb;const pts=['soccer','hockey'].includes(LG[lg].kind);const pa=pts?stn(a,'points'):NaN,pb=pts?stn(b,'points'):NaN;if(isFinite(pa)&&isFinite(pb)&&pa!==pb)return pb-pa;return (stn(b,'winPercent')||0)-(stn(a,'winPercent')||0)})}
