@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 
 const LEAGUES = ['mex.1','uefa.champions','uefa.europa','uefa.europa.conf','eng.1','esp.1','ita.1','ger.1','fra.1','ned.1','por.1','eng.2','tur.1','sco.1','usa.1','conmebol.libertadores','concacaf.champions','arg.1','bra.1'];
-const FILE = 'photos.json';
+const SHARD = Number(process.env.SHARD || 0), SHARDS = Number(process.env.SHARDS || 1);
+const FILE = SHARDS > 1 ? `photos-${SHARD}.json` : 'photos.json';
 const START = Date.now();
 const MAXMS = 5.3 * 3600e3;          // GitHub corta a las 6 h; se detiene antes y guarda
 const GAP = 2200;                    // pausa entre consultas a TheSportsDB (~27 por minuto)
@@ -20,6 +21,12 @@ const today = Math.floor(Date.now() / 864e5);
 let db = { v: 1, p: {}, t: {} };
 try { db = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
 db.p = db.p || {}; db.t = db.t || {};
+// Lo que ya encontraron los otros robots (o la corrida anterior) no se vuelve a buscar
+const known = {};
+for (const f of fs.readdirSync('.').filter(f => /^photos(-\d+)?\.json$/.test(f) && f !== FILE)) {
+  try { const o = JSON.parse(fs.readFileSync(f, 'utf8')); Object.entries(o.p || {}).forEach(([k, v]) => { if (v) known[k] = v; }); } catch {}
+}
+const hash = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
 
 async function getJSON(u, tries = 3) {
   for (let i = 0; i < tries; i++) {
@@ -42,8 +49,8 @@ const enc = u => {
 const save = () => fs.writeFileSync(FILE, JSON.stringify(db));
 function commit(msg) {
   save();
-  try { execSync(`git add ${FILE} && git commit -q -m "${msg}" && git pull --rebase -q && git push -q`, { stdio: 'inherit' }); }
-  catch { console.log('Sin cambios que subir'); }
+  try { execSync(`git add ${FILE} && git commit -q -m "${msg}"`, { stdio: 'inherit' }); } catch { console.log('Sin cambios que subir'); return; }
+  for (let i = 0; i < 6; i++) { try { execSync('git pull --rebase -q && git push -q', { stdio: 'inherit' }); return; } catch { execSync(`sleep ${5 + i * 7}`); } }
 }
 
 // 1. Todos los jugadores de todas las ligas, desde ESPN
@@ -53,6 +60,9 @@ for (const lg of LEAGUES) {
   const teams = new Map();
   const walk = o => { if (!o) return; (o.standings?.entries || []).forEach(e => e.team && teams.set(String(e.team.id), e.team.displayName)); (o.children || []).forEach(walk); };
   walk(st);
+  // Todos los equipos de la competencia (incluye copas sin tabla, como Libertadores o Concachampions)
+  const tl = await getJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams?limit=500`);
+  (tl?.sports?.[0]?.leagues?.[0]?.teams || []).forEach(x => x.team && teams.set(String(x.team.id), x.team.displayName));
   for (const [tid, tname] of teams) {
     const r = await getJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams/${tid}/roster`);
     let ath = []; (r?.athletes || []).forEach(a => { if (a.items) ath = ath.concat(a.items); else ath.push(a); });
@@ -63,8 +73,8 @@ for (const lg of LEAGUES) {
 }
 
 // 2. Los que faltan
-const todo = [...players].filter(([id]) => !(id in db.p) || (db.p[id] === '' && today - (db.t[id] || 0) >= RETRY_DAYS));
-console.log(`Pendientes: ${todo.length} de ${players.size}`);
+const todo = [...players].filter(([id, p]) => hash(p.team) % SHARDS === SHARD && !known[id] && (!(id in db.p) || (db.p[id] === '' && today - (db.t[id] || 0) >= RETRY_DAYS)));
+console.log(`Robot ${SHARD + 1} de ${SHARDS} · pendientes: ${todo.length} de ${players.size}`);
 const byTeam = new Map();
 todo.forEach(([id, p]) => { if (!byTeam.has(p.team)) byTeam.set(p.team, []); byTeam.get(p.team).push([id, p]); });
 
@@ -94,9 +104,9 @@ outer: for (const [team, list] of byTeam) {
       }
     }
     db.p[id] = enc(u); db.t[id] = today; done++;
-    if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos de jugadores: +${done}`); lastCommit = Date.now(); }
+    if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done}`); lastCommit = Date.now(); }
   }
 }
-commit(`Fotos de jugadores: +${done}`);
+commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done}`);
 const found = Object.values(db.p).filter(Boolean).length;
 console.log(`Listo: ${done} revisados en esta corrida · ${found} con foto de ${Object.keys(db.p).length}`);
