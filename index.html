@@ -575,7 +575,10 @@ const api={
   scoreboard(lg,date){const L=LG[lg];return this.get(`${L.sport}/${L.league}/scoreboard?dates=${date}&limit=300`)},
   summary(lg,id){const L=LG[lg];return this.get(`${L.sport}/${L.league}/summary?event=${id}`)},
   roster(lg,teamId){const L=LG[lg];return this.get(`${L.sport}/${L.league}/teams/${teamId}/roster`)},
-  scoreboardRange(lg,a,b){const L=LG[lg];return this.get(`${L.sport}/${L.league}/scoreboard?dates=${a}-${b}&limit=300`)},
+  async scoreboardRange(lg,a,b){const L=LG[lg];if(S.mode==='demo')return this.get(`${L.sport}/${L.league}/scoreboard?dates=${a}-${b}&limit=300`);
+    const days=[];const d=new Date(+a.slice(0,4),+a.slice(4,6)-1,+a.slice(6));for(let i=0;i<7;i++){const x=new Date(d);x.setDate(d.getDate()+i);const k=`${x.getFullYear()}${String(x.getMonth()+1).padStart(2,'0')}${String(x.getDate()).padStart(2,'0')}`;if(k>b)break;days.push(k)}
+    const rs=await Promise.all(days.map(k=>this.get(`${L.sport}/${L.league}/scoreboard?dates=${k}&limit=300`).catch(()=>null)));if(!rs.some(Boolean))throw new Error('sin datos');
+    const seen=new Set(),events=[];rs.forEach(j=>(j&&j.events||[]).forEach(e=>{if(!seen.has(e.id)){seen.add(e.id);events.push(e)}}));return {leagues:(rs.find(j=>j&&j.leagues)||{}).leagues,events}},
   async standings(lg){const L=LG[lg];if(S.mode==='demo')return this.get(`${L.sport}/${L.league}/standings`);
     const r=await fetch(`https://site.api.espn.com/apis/v2/sports/${L.sport}/${L.league}/standings`,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()},
   schedule(lg,teamId){const L=LG[lg];return this.get(`${L.sport}/${L.league}/teams/${teamId}/schedule`)},
@@ -1253,7 +1256,7 @@ const stn=(e,n)=>{const x=stEntry(e,n);return x?Number(x.value):NaN};
 function standingsHtml(lg,hl){const st=S.stand[lg];if(!st)return '<div class="skel"></div><div class="skel"></div>';
   if(!st.groups.length)return '<div class="note">ESPN no trae tabla para esta liga.</div>';
   const cols=SCOLS[LG[lg].kind]||SCOLS.soccer;const zones=new Map();
-  const html=st.groups.map(gr=>{const es=[...gr.entries].sort((a,b)=>{const ra=stn(a,'rank'),rb=stn(b,'rank');if(isFinite(ra)&&isFinite(rb)&&ra!==rb)return ra-rb;const pa=stn(a,'points'),pb=stn(b,'points');if(isFinite(pa)&&isFinite(pb)&&pa!==pb)return pb-pa;return (stn(b,'winPercent')||0)-(stn(a,'winPercent')||0)});
+  const html=st.groups.map(gr=>{const es=[...gr.entries].sort((a,b)=>{const ra=stn(a,'rank'),rb=stn(b,'rank');if(isFinite(ra)&&isFinite(rb)&&ra!==rb)return ra-rb;const pts=['soccer','hockey'].includes(LG[lg].kind);const pa=pts?stn(a,'points'):NaN,pb=pts?stn(b,'points'):NaN;if(isFinite(pa)&&isFinite(pb)&&pa!==pb)return pb-pa;return (stn(b,'winPercent')||0)-(stn(a,'winPercent')||0)});
     return `${st.groups.length>1?`<span class="flabel">${esc(gr.name)}</span>`:''}<div class="tblw"><table class="tbl st"><thead><tr><th>Equipo</th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr></thead><tbody>${es.map((e,i)=>{const t=e.team||{};
       const tt={id:String(t.id),abbr:t.abbreviation||'',name:t.shortDisplayName||t.name||t.displayName||'',color:'#'+String(t.color||'5a6577').replace('#',''),logo:(t.logos&&t.logos[0]&&t.logos[0].href)||''};
       if(e.note&&e.note.color&&e.note.description)zones.set(e.note.color,e.note.description);
