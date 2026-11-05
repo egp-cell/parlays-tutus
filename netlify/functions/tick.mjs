@@ -64,9 +64,10 @@ function events(g, p) {
 const snap = g => ({ state: g.state, h: g.home?.score || 0, a: g.away?.score || 0, stn: g.stn || '', reds: g.reds || 0, ses: g.ses, lead: g.lead, rd: g.rd, close: g.close || 0 });
 
 export default async () => {
-  const pub = process.env.VAPID_PUBLIC, priv = process.env.VAPID_PRIVATE;
-  if (!pub || !priv) return new Response('Faltan llaves VAPID', { status: 500 });
-  webpush.setVapidDetails('mailto:avisos@tutus-score.app', pub, priv);
+  // Las llaves las crea /vapid la primera vez y viven en Netlify Blobs (nunca en el repo)
+  const keys = await getStore('cfg').get('vapid', { type: 'json' });
+  if (!keys) return new Response('sin llaves todavía');
+  webpush.setVapidDetails('mailto:avisos@tutus-score.app', keys.publicKey, keys.privateKey);
   const subsStore = getStore('subs'), stateStore = getStore('state');
   const { blobs } = await subsStore.list();
   const subs = (await Promise.all(blobs.map(async b => ({ key: b.key, v: await subsStore.get(b.key, { type: 'json' }) })))).filter(x => x.v);
