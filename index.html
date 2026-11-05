@@ -974,7 +974,7 @@ function renderSheet(keep){
   el.innerHTML=`<div class="sh-h"><div class="grab"></div><div class="sh-top">${v.back?`<button class="ib" data-a="${v.back}" aria-label="Atrás">${IC.back}</button>`:S.stack.length?`<button class="ib" data-a="sheetBack" aria-label="Atrás">${IC.back}</button>`:''}<div class="sh-title">${v.title}</div><button class="ib" data-a="close" aria-label="Cerrar">${IC.x}</button></div></div>
     <div class="sh-b">${v.html}</div>${v.foot?`<div class="sh-f">${v.foot}</div>`:''}`;
   if(keep)el.querySelector('.sh-b').scrollTop=sc;
-  if(s.type==='team'&&s.tab==='tp'&&!s.anch){const a=el.querySelector('.tgw.anch'),b=el.querySelector('.sh-b');if(a&&b){requestAnimationFrame(()=>{b.scrollTop+=a.getBoundingClientRect().top-b.getBoundingClientRect().top-b.clientHeight/2+a.offsetHeight/2});s.anch=1}}
+  if(s.type==='team'&&s.tab==='tp'&&!s.anch){const a=el.querySelector('.tgw.anch'),b=el.querySelector('.sh-b');if(a&&b){b.scrollTop+=a.getBoundingClientRect().top-b.getBoundingClientRect().top-b.clientHeight/2+a.offsetHeight/2;s.anch=1}}
   if(v.focus&&matchMedia('(pointer:fine)').matches){const f=$(v.focus);if(f){f.focus();const n=f.value.length;f.setSelectionRange(n,n)}}}
 
 /* ---------- Agregar parlay ---------- */
