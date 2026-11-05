@@ -754,18 +754,25 @@ async function tsTeam(team){const k=nkey(team);if(!k||TST[k])return;TST[k]=1;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function tsFace(name,team){if(name in TS)return Promise.resolve(TS[name]);if(TSN[nkey(name)]){TS[name]=TSN[nkey(name)];return Promise.resolve(TS[name])}if(TSP[name])return TSP[name].p;let res;const p=new Promise(r=>res=r);TSP[name]={p,res,team,n:0};TSQ.push(name);pumpTS();return p}
 async function pumpTS(){if(tsRun)return;tsRun=true;try{while(TSQ.length){const name=TSQ.pop();const q=TSP[name];if(!q)continue;let u=null;
-  if(q.team&&!TST[nkey(q.team)])await tsTeam(q.team);if(TSN[nkey(name)]){TS[name]=TSN[nkey(name)];delete TSP[name];q.res(TS[name]);continue}
+  if(q.team&&!TST[nkey(q.team)])await tsTeam(q.team);if(TSN[nkey(name)]){TS[name]=TSN[nkey(name)]+(/\/small$/.test(TSN[nkey(name)])?'':'/small');delete TSP[name];q.res(TS[name]);continue}
   const tw=norm(q.team||'').split(' ').filter(w=>w.length>2);const words=name.split(' ');
   const vs=[...new Set([name,name.normalize('NFD').replace(/[̀-ͯ]/g,''),words.length>2?words[0]+' '+words[words.length-1]:''].filter(Boolean))];
   for(const qn of vs){let got=null;try{const r=await fetch('https://www.thesportsdb.com/api/v1/json/123/searchplayers.php?p='+encodeURIComponent(qn));if(r.ok){const j=await r.json();const ps=(j.player||[]).filter(x=>x.strSport==='Soccer');
       const pl=ps.find(x=>tw.some(w=>norm(x.strTeam||'').includes(w)))||(qn===name?ps[0]:null);got=pl?(pl.strCutout||pl.strThumb||''):''}}catch(e){}
     if(got===null){u=null;break}u=got;if(got)break;await sleep(2100)}
   if(u===null&&++q.n<4){TSQ.unshift(name);await sleep(12000);continue}
-  TS[name]=u||'';try{localStorage.setItem(TSK,JSON.stringify(TS))}catch(e){}delete TSP[name];q.res(u||'');await sleep(2100)}}finally{tsRun=false}}
+  TS[name]=u&&/r2\.thesportsdb\.com/.test(u)&&!/\/small$/.test(u)?u+'/small':(u||'');try{localStorage.setItem(TSK,JSON.stringify(TS))}catch(e){}delete TSP[name];q.res(u||'');await sleep(2100)}}finally{tsRun=false}}
+/* Fotos ya listas: photos.json lo llena el robot del repo; con esto salen al instante */
+let PH={};
+const phUrl=c=>!c?'':c[0]==='c'?`https://r2.thesportsdb.com/images/media/player/cutout/${c.slice(1)}.png/small`:c[0]==='t'?`https://r2.thesportsdb.com/images/media/player/thumb/${c.slice(1)}.jpg/small`:c[0]==='p'?`https://r2.thesportsdb.com/images/media/player/thumb/${c.slice(1)}.png/small`:c.slice(1);
+const ehId=el=>((el.dataset.eh||'').match(/\/soccer\/players\/full\/(\d+)\.png/)||[])[1];
+function applyPH(){document.querySelectorAll('[data-ts]:not([data-fd])').forEach(el=>{const id=ehId(el);if(id&&PH[id])putFace(el,phUrl(PH[id]))})}
+try{const c=JSON.parse(localStorage.getItem('pt_ph')||'null');if(c&&c.p)PH=c.p}catch(e){}
+fetch('photos.json',{cache:'no-cache'}).then(r=>r.ok?r.json():null).then(j=>{if(j&&j.p){PH=j.p;try{localStorage.setItem('pt_ph',JSON.stringify({p:PH}))}catch(e){}applyPH()}}).catch(()=>{});
 function putFace(el,u){if(el.dataset.fd)return;el.dataset.fd='1';if(el.classList.contains('av')){const sp=document.createElement('span');sp.className='ph';sp.innerHTML=`<img class="cut" src="${esc(u)}" alt="">`;el.insertBefore(sp,el.querySelector('.tl'))}else{el.classList.add('hasf');el.insertAdjacentHTML('afterbegin',`<img class="cut" src="${esc(u)}" alt="">`)}}
 function applyFace(name,u){if(!u){document.querySelectorAll('[data-ts]').forEach(el=>{if(el.dataset.ts===name&&el.dataset.eh)putFace(el,el.dataset.eh)});return}document.querySelectorAll('[data-ts]').forEach(el=>{if(el.dataset.ts===name)putFace(el,u)})}
 const faceIO='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){faceIO.unobserve(e.target);const n=e.target.dataset.ts;tsFace(n,e.target.dataset.tt).then(u=>applyFace(n,u))}}),{rootMargin:'150px'}):null;
-function hydrateFaces(){document.querySelectorAll('[data-ts]:not([data-fd]):not([data-ob])').forEach(el=>{const n=el.dataset.ts;if(n in TS){el.dataset.ob='1';if(TS[n])putFace(el,TS[n]);else if(el.dataset.eh)putFace(el,el.dataset.eh);return}el.dataset.ob='1';if(faceIO)faceIO.observe(el);else tsFace(n,el.dataset.tt).then(u=>applyFace(n,u))})}
+function hydrateFaces(){document.querySelectorAll('[data-ts]:not([data-fd]):not([data-ob])').forEach(el=>{const n=el.dataset.ts;const pid=ehId(el);if(pid&&PH[pid]){putFace(el,phUrl(PH[pid]));return}if(pid&&pid in PH&&!(n in TS)){el.dataset.ob='1';if(el.dataset.eh)putFace(el,el.dataset.eh);return}if(n in TS){el.dataset.ob='1';if(TS[n])putFace(el,TS[n]);else if(el.dataset.eh)putFace(el,el.dataset.eh);return}el.dataset.ob='1';if(faceIO)faceIO.observe(el);else tsFace(n,el.dataset.tt).then(u=>applyFace(n,u))})}
 let hyT;new MutationObserver(()=>{clearTimeout(hyT);hyT=setTimeout(hydrateFaces,80)}).observe(document.body,{childList:true,subtree:true});
 document.addEventListener('error',e=>{const t=e.target;if(t&&t.tagName==='IMG'){if(t.dataset.fb){const fb=t.dataset.fb;delete t.dataset.fb;t.src=fb;return}if(t.dataset.nm&&!t.dataset.wk){t.dataset.wk='1';wikiFace(t.dataset.nm).then(u=>{if(u){t.addEventListener('load',()=>{t.style.opacity=1},{once:true});t.src=u}else{const ph=t.closest('.ph');(ph||t).remove()}});return}const hf=t.closest('.hasf');if(hf)hf.classList.remove('hasf');const ph=t.closest('.ph');(ph||t).remove()}},true);
 
@@ -1272,7 +1279,7 @@ const STAR='<svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L
 function starBtn(lg,t){return `<button class="star ${isFav(lg,t.id)?'on':''}" data-a="favTog" data-lg="${lg}" data-id="${esc(t.id)}" data-abbr="${esc(t.abbr)}" data-name="${esc(t.name)}" data-color="${esc(t.color)}" data-logo="${esc(t.logo||'')}" aria-label="${isFav(lg,t.id)?'Quitar de':'Agregar a'} mis equipos">${STAR}</button>`}
 async function fetchDetail(k){const[lg,id]=k.split(':');const j=await api.summary(lg,id);const c=j.header.competitions[0];const g=normComp(lg,id,c,c.date);const old=S.ev[k];if(!g.odds&&old?.g?.odds)g.odds=old.g.odds;
   S.ev[k]={g,stats:playerStats(j),full:true,at:Date.now()};S.det[k]={j,at:Date.now()};
-  if(LG[lg]?.kind==='soccer'&&showImg()&&S.mode==='live')(j.rosters||[]).forEach(r=>(r.roster||[]).slice().reverse().forEach(x=>{const n=x.athlete&&x.athlete.displayName;if(n&&!(n in TS))tsFace(n,r.team&&r.team.displayName).then(u=>applyFace(n,u))}));return j}
+  if(LG[lg]?.kind==='soccer'&&showImg()&&S.mode==='live')(j.rosters||[]).forEach(r=>(r.roster||[]).slice().reverse().forEach(x=>{const n=x.athlete&&x.athlete.displayName;if(n&&!(n in TS)&&!(String(x.athlete.id) in PH))tsFace(n,r.team&&r.team.displayName).then(u=>applyFace(n,u))}));return j}
 function openGameDetail(k){const s={type:'gd',key:k,tab:'res',side:'away'};openSheet(s,true);fetchDetail(k).then(()=>{if(S.sheet===s)renderSheet(true)}).catch(()=>{if(S.sheet===s){s.err=true;renderSheet(true)}})}
 function followBtn(lg,t){const on=isFav(lg,t.id);return `<button class="follow ${on?'on':''}" data-a="favTog" data-lg="${lg}" data-id="${esc(t.id)}" data-abbr="${esc(t.abbr)}" data-name="${esc(t.name)}" data-color="${esc(t.color)}" data-logo="${esc(t.logo||'')}">${STAR}${on?'Siguiendo':'Seguir'}</button>`}
 function gdScore(g){const side=t=>`<div class="gt"><button class="gt-tm" data-a="openTeam" data-lg="${g.lg}" data-id="${esc(t.id)}" data-name="${esc(t.name)}" data-abbr="${esc(t.abbr)}" data-logo="${esc(t.logo||'')}" data-color="${esc(t.color||'')}" aria-label="Ver ${esc(t.name)}">${logo(t)}<b>${esc(t.name)} ›</b></button>${t.rec?`<span class="rec">${esc(t.rec)}</span>`:''}${followBtn(g.lg,t)}</div>`;
