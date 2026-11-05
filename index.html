@@ -761,11 +761,12 @@ const IC={
 
 /* Logos y fotos: solo se piden cuando hay conexión real a ESPN */
 const showImg=()=>S.mode==='live';
-function logo(t,size){if(!t)return'';return `<span class="tl" style="--c:${esc(t.color||'#5a6577')};--c2:${esc(t.alt||t.color||'#5a6577')};${size?`--s:${size}px`:''}"><b>${esc(t.abbr||'')}</b>${showImg()&&t.logo?`<img src="${esc(darkLogo(t.logo))}"${darkLogo(t.logo)!==t.logo?` data-fb="${esc(t.logo)}"`:''} alt="" loading="lazy">`:''}</span>`}
-const darkLogo=u=>/espncdn\.com\/i\/(team|league)logos\//.test(u||'')&&!/500-dark/.test(u)?u.replace('/500/','/500-dark/'):u;
+function logo(t,size){if(!t)return'';return `<span class="tl" style="--c:${esc(t.color||'#5a6577')};--c2:${esc(t.alt||t.color||'#5a6577')};${size?`--s:${size}px`:''}"><b>${esc(t.abbr||'')}</b>${showImg()&&t.logo&&!BADIMG.has(t.logo)?`<img src="${esc(darkLogo(t.logo))}"${darkLogo(t.logo)!==t.logo?` data-fb="${esc(t.logo)}"`:''} alt="" loading="lazy">`:''}</span>`}
+const BADIMG=new Set();
+const darkLogo=u=>BADIMG.has(String(u||'').replace('/500/','/500-dark/'))?u:/espncdn\.com\/i\/(team|league)logos\//.test(u||'')&&!/500-dark/.test(u)?u.replace('/500/','/500-dark/'):u;
 function headUrl(lg,id){const L=LG[lg];return L&&id?`https://a.espncdn.com/i/headshots/${L.hs}/players/full/${id}.png`:''}
 function avatar(name,head,team,size){const soc=!!(showImg()&&name&&/\/soccer\//.test(head||''));const f=soc?TS[name]:null;
-  return `<span class="av"${soc?` data-ts="${esc(name)}" data-tt="${esc(team&&team.name||'')}" data-eh="${esc(head)}"${f?' data-fd="1"':''}`:''} style="${size?`--s:${size}px;`:''}${team&&team.color?`--c:${esc(team.color)};--c2:${esc(team.alt||team.color)}`:''}"><b>${esc(initials(name))}</b>${soc?(f?`<span class="ph"><img class="cut" src="${esc(f)}" alt="" loading="lazy"></span>`:''):(showImg()&&head?`<span class="ph"><img src="${esc(head)}" alt="" loading="lazy"></span>`:'')}${team?logo(team):''}</span>`}
+  return `<span class="av"${soc?` data-ts="${esc(name)}" data-tt="${esc(team&&team.name||'')}" data-eh="${esc(head)}"${f?' data-fd="1"':''}`:''} style="${size?`--s:${size}px;`:''}${team&&team.color?`--c:${esc(team.color)};--c2:${esc(team.alt||team.color)}`:''}"><b>${esc(initials(name))}</b>${soc?(f?`<span class="ph"><img class="cut" src="${esc(f)}" alt="" loading="lazy"></span>`:''):(showImg()&&head&&!BADIMG.has(head)?`<span class="ph"><img src="${esc(head)}" alt="" loading="lazy"></span>`:'')}${team?logo(team):''}</span>`}
 /* Fotos de futbolistas: recortes uniformes de TheSportsDB (gratis), en fila y guardados en el teléfono */
 const TSK='pt_ts2';const TS=(()=>{try{return JSON.parse(localStorage.getItem(TSK)||'{}')}catch(e){return {}}})();const TSP={};const TSQ=[];let tsRun=false;
 const TSN=(()=>{try{return JSON.parse(localStorage.getItem('pt_tsn1')||'{}')}catch(e){return {}}})();const TST=(()=>{try{return JSON.parse(localStorage.getItem('pt_tst1')||'{}')}catch(e){return {}}})();
@@ -797,7 +798,7 @@ function applyFace(name,u){if(!u){document.querySelectorAll('[data-ts]').forEach
 const faceIO='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){faceIO.unobserve(e.target);const n=e.target.dataset.ts;tsFace(n,e.target.dataset.tt).then(u=>applyFace(n,u))}}),{rootMargin:'150px'}):null;
 function hydrateFaces(){document.querySelectorAll('[data-ts]:not([data-fd]):not([data-ob])').forEach(el=>{const n=el.dataset.ts;const pid=ehId(el);if(pid&&PH[pid]){putFace(el,phUrl(PH[pid]));return}if(pid&&pid in PH&&!(n in TS)){el.dataset.ob='1';if(el.dataset.eh)putFace(el,el.dataset.eh);return}if(n in TS){el.dataset.ob='1';if(TS[n])putFace(el,TS[n]);else if(el.dataset.eh)putFace(el,el.dataset.eh);return}el.dataset.ob='1';if(faceIO)faceIO.observe(el);else tsFace(n,el.dataset.tt).then(u=>applyFace(n,u))})}
 let hyT;new MutationObserver(()=>{clearTimeout(hyT);hyT=setTimeout(hydrateFaces,80)}).observe(document.body,{childList:true,subtree:true});
-document.addEventListener('error',e=>{const t=e.target;if(t&&t.tagName==='IMG'){if(t.dataset.fb){const fb=t.dataset.fb;delete t.dataset.fb;t.src=fb;return}if(t.dataset.nm&&!t.dataset.wk){t.dataset.wk='1';wikiFace(t.dataset.nm).then(u=>{if(u){t.addEventListener('load',()=>{t.style.opacity=1},{once:true});t.src=u}else{const ph=t.closest('.ph');(ph||t).remove()}});return}const hf=t.closest('.hasf');if(hf)hf.classList.remove('hasf');const ph=t.closest('.ph');(ph||t).remove()}},true);
+document.addEventListener('error',e=>{const t=e.target;if(t&&t.tagName==='IMG'){BADIMG.add(t.getAttribute('src'));if(t.dataset.fb){const fb=t.dataset.fb;delete t.dataset.fb;t.src=fb;return}if(t.dataset.nm&&!t.dataset.wk){t.dataset.wk='1';wikiFace(t.dataset.nm).then(u=>{if(u){t.addEventListener('load',()=>{t.style.opacity=1},{once:true});t.src=u}else{const ph=t.closest('.ph');(ph||t).remove()}});return}const hf=t.closest('.hasf');if(hf)hf.classList.remove('hasf');const ph=t.closest('.ph');(ph||t).remove()}},true);
 
 /* ================= Datos ================= */
 const api={
@@ -953,12 +954,26 @@ function renderAct(){const n=S.draft.legs.length;const el=$('#hact');if(!el)retu
   el.innerHTML=S.mode==='loading'?'':S.tab==='live'?`<button class="newbtn" data-a="add">${IC.plus}${n?`Seguir (${n})`:'Agregar'}</button>`:S.tab==='teams'&&S.ftab!=='lg'&&S.favs.length?`<button class="newbtn ghost" data-a="pickTeams">${IC.plus}Equipos</button>`:''}
 function renderMode(){renderAct();$('#ttl').textContent={live:'Mis parlays',games:'Partidos',search:'Buscar',teams:'Favoritos'}[S.tab];const el=$('#mode');el.className='pill '+(S.mode==='live'?'live':S.mode==='demo'?'demo':'');const t=S.lastSync?hhmm(new Date(S.lastSync).toISOString()):'';
   el.innerHTML=S.mode==='loading'?'<span class="d"></span>Conectando…':S.mode==='live'?`<span class="d"></span>En vivo · ${t}`:`<span class="d"></span>Demo`}
+
+/* Actualiza la pantalla cambiando solo lo que cambió: así no parpadean logos ni fotos */
+function morph(a,b){
+  if(a.nodeType!==b.nodeType||a.nodeName!==b.nodeName){a.replaceWith(b);return}
+  if(a.nodeType!==1){if(a.nodeValue!==b.nodeValue)a.nodeValue=b.nodeValue;return}
+  if(a.dataset.ts&&a.dataset.fd&&a.dataset.ts===b.dataset.ts)return;
+  for(const at of [...b.attributes]){if(a.getAttribute(at.name)!==at.value){if(a.tagName==='INPUT'&&at.name==='value')continue;a.setAttribute(at.name,at.value)}}
+  for(const at of [...a.attributes]){if(!b.hasAttribute(at.name)&&!/^data-(fd|ob|wk)$/.test(at.name))a.removeAttribute(at.name)}
+  if(a.tagName==='INPUT'||a.tagName==='TEXTAREA'){if(document.activeElement!==a&&a.value!==b.value)a.value=b.value;return}
+  if(a.tagName==='svg'||a.tagName==='SVG'){if(a.innerHTML!==b.innerHTML)a.innerHTML=b.innerHTML;return}
+  morphKids(a,b)}
+function morphKids(a,b){const ac=[...a.childNodes],bc=[...b.childNodes];for(let i=0;i<bc.length;i++){if(i<ac.length)morph(ac[i],bc[i]);else a.appendChild(bc[i])}for(let i=bc.length;i<ac.length;i++)ac[i].remove()}
+function setHTML(el,html){if(!el.firstChild){el.innerHTML=html;return}const t=document.createElement(el.tagName==='MAIN'?'main':'div');t.innerHTML=html;morphKids(el,t)}
+
 function renderMain(){
   renderMode();renderTabs();
   const v=$('#view');if(S.mode==='loading'){v.innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';return}
   if(S.tab==='games'){const d=document.querySelector('.stick .chips'),l=document.querySelector('.lchips');S.chipsScroll={d:d?d.scrollLeft:null,l:l?l.scrollLeft:null}}
   const TP=window.TOPEL||(window.TOPEL=document.querySelector('.top'));if(TP&&TP.parentNode===v)TP.remove();
-  v.innerHTML=S.tab==='live'?viewLive():S.tab==='games'?viewGames():S.tab==='teams'?viewTeams():S.tab==='search'?viewSearch():viewLive();
+  setHTML(v,S.tab==='live'?viewLive():S.tab==='games'?viewGames():S.tab==='teams'?viewTeams():S.tab==='search'?viewSearch():viewLive());
   if(S.tab==='games'){const hc=(el,ctr)=>{if(!el)return;const p=el.parentElement;const want=ctr?el.offsetLeft-(p.clientWidth-el.offsetWidth)/2:Math.min(p.scrollLeft,el.offsetLeft-16);if(ctr||el.offsetLeft<p.scrollLeft||el.offsetLeft+el.offsetWidth>p.scrollLeft+p.clientWidth)p.scrollLeft=Math.max(0,want)};
     if(!S.chipsSet||S.chipsSet!==S.games.off+'|'+S.games.lg){S.chipsSet=S.games.off+'|'+S.games.lg;hc(document.querySelector('.stick .chips [aria-pressed="true"]'),true);hc(document.querySelector('.lchips [aria-pressed="true"]'),false)}else{const sc=S.chipsScroll||{};const d=document.querySelector('.stick .chips'),l=document.querySelector('.lchips');if(d&&sc.d!=null)d.scrollLeft=sc.d;if(l&&sc.l!=null)l.scrollLeft=sc.l}const st=v.querySelector('.stick');if(st)v.style.setProperty('--sh',st.offsetHeight+'px')}
   if(TP){if(S.tab==='games'){v.prepend(TP);TP.classList.add('inview')}else if(TP.parentNode!==v.parentNode){TP.classList.remove('inview');v.parentNode.insertBefore(TP,v)}}}
@@ -1026,7 +1041,7 @@ function viewGames(){
   if(!any&&loading)body='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   else if(!any)body=`<div class="empty"><h3>Sin partidos</h3><p>No hay juegos ${lg==='all'?'':'de '+LG[lg].name+' '}para ${dayLabel(off).toLowerCase()}.</p></div>`;
   else if(loading)body+='<div class="skel"></div>';
-  return installBanner()+`<div class="stick"><div class="chips">${days}</div></div>${strip}<div class="chips lchips">${lgs}</div><div data-swipe="swday" style="min-height:60vh">${body}</div>`}
+  return installBanner()+`<div class="stick"><div class="chips">${days}</div></div><div class="chips lchips">${lgs}</div>${strip}<div data-swipe="swday" style="min-height:60vh">${body}</div>`}
 function gameRow(g){
   const mine=S.parlays.some(p=>!p.settled&&p.legs.some(l=>l.key===g.key));const pre=g.state==='pre',live=g.state==='in';
   const lo=(t,o)=>g.state==='post'&&t.score<o.score?'lo':'';
@@ -1057,8 +1072,8 @@ function renderSheet(keep){
   const s=S.sheet;if(!s)return;const el=$('#sheet');
   const v=s.type==='ply'?sheetPlayer(s):s.type==='lg'?sheetLeague(s):s.type==='build'?sheetBuild(s):s.type==='parlay'?sheetParlay(s):s.type==='leg'?sheetLeg(s):s.type==='gd'?sheetGD(s):s.type==='team'?sheetTeam(s):s.type==='pickTeams'?sheetPickTeams(s):sheetInfo();
   const sc=el.querySelector('.sh-b')?.scrollTop||0;el.classList.toggle('tall',['build','pickTeams'].includes(s.type));el.classList.toggle('full',['gd','team','lg','ply'].includes(s.type));
-  el.innerHTML=`<div class="sh-h"><div class="grab"></div><div class="sh-top">${v.back?`<button class="ib" data-a="${v.back}" aria-label="Atrás">${IC.back}</button>`:S.stack.length?`<button class="ib" data-a="sheetBack" aria-label="Atrás">${IC.back}</button>`:''}<div class="sh-title">${v.title}</div><button class="ib" data-a="close" aria-label="Cerrar">${IC.x}</button></div></div>
-    <div class="sh-b">${v.html}</div>${v.foot?`<div class="sh-f">${v.foot}</div>`:''}`;
+  const shtml=`<div class="sh-h"><div class="grab"></div><div class="sh-top">${v.back?`<button class="ib" data-a="${v.back}" aria-label="Atrás">${IC.back}</button>`:S.stack.length?`<button class="ib" data-a="sheetBack" aria-label="Atrás">${IC.back}</button>`:''}<div class="sh-title">${v.title}</div><button class="ib" data-a="close" aria-label="Cerrar">${IC.x}</button></div></div>
+    <div class="sh-b">${v.html}</div>${v.foot?`<div class="sh-f">${v.foot}</div>`:''}`;if(keep&&el.firstChild)setHTML(el,shtml);else el.innerHTML=shtml;
   if(keep)el.querySelector('.sh-b').scrollTop=sc;
   if(s.type==='team'&&s.tab==='tp'&&!s.anch){const a=el.querySelector('.tgw.anch'),b=el.querySelector('.sh-b');if(a&&b){b.scrollTop+=a.getBoundingClientRect().top-b.getBoundingClientRect().top-b.clientHeight/2+a.offsetHeight/2;s.anch=1}}
   if(v.focus&&matchMedia('(pointer:fine)').matches){const f=$(v.focus);if(f){f.focus();const n=f.value.length;f.setSelectionRange(n,n)}}}
