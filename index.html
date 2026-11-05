@@ -654,6 +654,10 @@ button.bnr{width:100%;text-align:left}
 .lchip[aria-pressed="true"]{background:#2A1A14;border-color:var(--accent);color:var(--fg)}
 .lchip .ln{color:var(--fg);font-weight:600}
 .lchip[aria-pressed="true"] .ln{font-weight:800}
+.tbl th:first-child,.tbl td:first-child{background:#101010;box-shadow:-18px 0 0 #101010,8px 0 10px -8px rgba(0,0,0,.8)}
+.tbl tr.mine td:first-child{background:#22110b;box-shadow:-18px 0 0 #101010,8px 0 10px -8px rgba(0,0,0,.8)}
+.tbl tr.hl td:first-child{background:#24120c}
+.tbl.st td:first-child{position:sticky;left:0;z-index:1}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -1351,9 +1355,9 @@ function sheetGD(s){
   const title=`${esc(g.away.abbr)} ${kind==='soccer'?'vs':'@'} ${esc(g.home.abbr)}<div class="sh-sub">${LG[g.lg].name}${d?.gameInfo?.venue?.fullName?' · '+esc(d.gameInfo.venue.fullName):''}</div>`;
   let h=gdScore(g);
   if(!d)return {title,html:h+(s.err?'<div class="note">ESPN no respondió para este partido. Intenta en un momento.</div>':'<div class="skel"></div><div class="skel"></div>')};
-  const tabs=kind==='soccer'?[['res','Resumen'],['al','Alineaciones'],['pl','Jugadores'],['tm','Equipos']]:[['res','Resumen'],['pl','Jugadores'],['tm','Equipos']];if(kind!=='soccer'&&playsOf(d,kind).length)tabs.push(['pb','Jugadas']);
+  const tabs=kind==='soccer'?[['res','Resumen'],['al','Alineaciones'],['st','Estadísticas']]:[['res','Resumen'],['st','Estadísticas']];if(s.tab==='pl'||s.tab==='tm')s.tab='st';if(kind!=='soccer'&&playsOf(d,kind).length)tabs.push(['pb','Jugadas']);
   h+=`<div class="seg stk">${tabs.map(([k,l])=>`<button data-a="gdtab" data-v="${k}" aria-pressed="${s.tab===k}">${l}</button>`).join('')}</div>`;
-  h+=s.tab==='al'?gdLineup(s,g,d):s.tab==='pl'?gdPlayers(s,g,d,kind):s.tab==='tm'?gdTeams(g,d):s.tab==='pb'?gdPlays(g,d,kind):gdResumen(g,d,kind);
+  h+=s.tab==='al'?gdLineup(s,g,d):s.tab==='st'?`<span class="flabel">Equipos</span>${gdTeams(g,d)}<div style="height:16px"></div>${gdPlayers(s,g,d,kind)}`:s.tab==='pb'?gdPlays(g,d,kind):gdResumen(g,d,kind);
   return {title,html:h}}
 function gdResumen(g,d,kind){
   let h='';const my=myLegs(g.key);
