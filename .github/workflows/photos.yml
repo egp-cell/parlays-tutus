@@ -1,0 +1,25 @@
+name: Fotos de jugadores
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/photos.mjs'
+      - '.github/workflows/photos.yml'
+  schedule:
+    - cron: '17 */6 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: photos
+  cancel-in-progress: false
+jobs:
+  photos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: git config user.name "tutus-bot" && git config user.email "tutus-bot@users.noreply.github.com"
+      - run: node tools/photos.mjs
