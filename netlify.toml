@@ -3,6 +3,8 @@
 [build]
   publish = "."
   command = "echo listo"
+  # Solo despliega si cambió el servidor de avisos (las fotos y la app no gastan créditos)
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- netlify/functions netlify.toml package.json"
 
 [functions]
   directory = "netlify/functions"
