@@ -1,5 +1,5 @@
 // Service worker de Quinielas Tutus: deja la app instalable, abre sin conexión y muestra los avisos.
-const CACHE = 'tutus-v23';
+const CACHE = 'tutus-v24';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon.png'];
 
 self.addEventListener('install', e => {
@@ -30,12 +30,23 @@ self.addEventListener('fetch', e => {
   );
 });
 
+// Al tocar un aviso: abre la app directo en ese partido
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const k = (e.notification.data && e.notification.data.k) || '';
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
-      for (const w of ws) { if ('focus' in w) return w.focus(); }
-      return self.clients.openWindow('./');
+      for (const w of ws) { if ('focus' in w) { if (k) w.postMessage({ open: k }); return w.focus(); } }
+      return self.clients.openWindow(k ? './?g=' + encodeURIComponent(k) : './');
     })
   );
+});
+
+// Avisos que manda el servidor aunque la app esté cerrada
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Tutus Score', {
+    body: d.body || '', tag: d.tag || undefined, renotify: !!d.tag, icon: 'icon-192.png', badge: 'icon-192.png', data: { k: d.k || '' }
+  }));
 });
