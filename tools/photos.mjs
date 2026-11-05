@@ -1,0 +1,102 @@
+// Robot de fotos de Tutus Score.
+// Junta a todos los futbolistas de las ligas de la app (plantillas de ESPN) y busca su foto profesional
+// recortada en TheSportsDB (gratis). Guarda todo en photos.json para que la app las muestre al instante.
+// TheSportsDB gratis permite ~30 consultas por minuto, por eso avanza poco a poco y guarda su progreso.
+import fs from 'node:fs';
+import { execSync } from 'node:child_process';
+
+const LEAGUES = ['mex.1','uefa.champions','uefa.europa','uefa.europa.conf','eng.1','esp.1','ita.1','ger.1','fra.1','ned.1','por.1','eng.2','tur.1','sco.1','usa.1','conmebol.libertadores','concacaf.champions','arg.1','bra.1'];
+const FILE = 'photos.json';
+const START = Date.now();
+const MAXMS = 5.3 * 3600e3;          // GitHub corta a las 6 h; se detiene antes y guarda
+const GAP = 2200;                    // pausa entre consultas a TheSportsDB (~27 por minuto)
+const RETRY_DAYS = 21;               // reintenta jugadores sin foto cada 3 semanas
+const TSDB = 'https://www.thesportsdb.com/api/v1/json/123/';
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+const today = Math.floor(Date.now() / 864e5);
+
+let db = { v: 1, p: {}, t: {} };
+try { db = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
+db.p = db.p || {}; db.t = db.t || {};
+
+async function getJSON(u, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(u, { headers: { 'User-Agent': 'tutus-score-photos' } });
+      if (r.status === 429) { await sleep(65000); continue; }
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { await sleep(5000); }
+  }
+  return null;
+}
+// Guarda solo el nombre del archivo para que photos.json pese poco
+const enc = u => {
+  if (!u) return '';
+  let m = u.match(/\/player\/cutout\/([^/]+)\.png$/); if (m) return 'c' + m[1];
+  m = u.match(/\/player\/thumb\/([^/]+)\.(jpg|png)$/); if (m) return (m[2] === 'png' ? 'p' : 't') + m[1];
+  return 'u' + u;
+};
+const save = () => fs.writeFileSync(FILE, JSON.stringify(db));
+function commit(msg) {
+  save();
+  try { execSync(`git add ${FILE} && git commit -q -m "${msg}" && git pull --rebase -q && git push -q`, { stdio: 'inherit' }); }
+  catch { console.log('Sin cambios que subir'); }
+}
+
+// 1. Todos los jugadores de todas las ligas, desde ESPN
+const players = new Map();
+for (const lg of LEAGUES) {
+  const st = await getJSON(`https://site.api.espn.com/apis/v2/sports/soccer/${lg}/standings`);
+  const teams = new Map();
+  const walk = o => { if (!o) return; (o.standings?.entries || []).forEach(e => e.team && teams.set(String(e.team.id), e.team.displayName)); (o.children || []).forEach(walk); };
+  walk(st);
+  for (const [tid, tname] of teams) {
+    const r = await getJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams/${tid}/roster`);
+    let ath = []; (r?.athletes || []).forEach(a => { if (a.items) ath = ath.concat(a.items); else ath.push(a); });
+    ath.forEach(a => { const id = String(a.id || ''); if (id && !players.has(id)) players.set(id, { name: a.displayName || a.fullName || '', team: tname }); });
+    await sleep(120);
+  }
+  console.log(`${lg}: ${teams.size} equipos · ${players.size} jugadores en total`);
+}
+
+// 2. Los que faltan
+const todo = [...players].filter(([id]) => !(id in db.p) || (db.p[id] === '' && today - (db.t[id] || 0) >= RETRY_DAYS));
+console.log(`Pendientes: ${todo.length} de ${players.size}`);
+const byTeam = new Map();
+todo.forEach(([id, p]) => { if (!byTeam.has(p.team)) byTeam.set(p.team, []); byTeam.get(p.team).push([id, p]); });
+
+let done = 0, lastCommit = Date.now();
+outer: for (const [team, list] of byTeam) {
+  if (Date.now() - START > MAXMS) break;
+  // Primero la plantilla del equipo de un jalón (la versión gratis trae hasta 10)
+  const squad = new Map();
+  const tj = await getJSON(TSDB + 'searchteams.php?t=' + encodeURIComponent(team)); await sleep(GAP);
+  const tm = (tj?.teams || []).find(x => x.strSport === 'Soccer');
+  if (tm) {
+    const sj = await getJSON(TSDB + 'lookup_all_players.php?id=' + tm.idTeam); await sleep(GAP);
+    (sj?.player || []).forEach(pl => { const u = pl.strCutout || pl.strThumb; if (u) squad.set(norm(pl.strPlayer), u); });
+  }
+  const tw = norm(team).split(' ').filter(w => w.length > 2);
+  for (const [id, p] of list) {
+    if (Date.now() - START > MAXMS) break outer;
+    let u = squad.get(norm(p.name)) || null;
+    if (!u) {
+      const w = p.name.split(' ');
+      const vs = [...new Set([p.name, norm(p.name), w.length > 2 ? w[0] + ' ' + w[w.length - 1] : ''].filter(Boolean))];
+      for (const qn of vs) {
+        const j = await getJSON(TSDB + 'searchplayers.php?p=' + encodeURIComponent(qn)); await sleep(GAP);
+        const ps = (j?.player || []).filter(x => x.strSport === 'Soccer');
+        const pl = ps.find(x => tw.some(t => norm(x.strTeam).includes(t))) || (qn === p.name ? ps[0] : null);
+        if (pl && (pl.strCutout || pl.strThumb)) { u = pl.strCutout || pl.strThumb; break; }
+      }
+    }
+    db.p[id] = enc(u); db.t[id] = today; done++;
+    if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos de jugadores: +${done}`); lastCommit = Date.now(); }
+  }
+}
+commit(`Fotos de jugadores: +${done}`);
+const found = Object.values(db.p).filter(Boolean).length;
+console.log(`Listo: ${done} revisados en esta corrida · ${found} con foto de ${Object.keys(db.p).length}`);
