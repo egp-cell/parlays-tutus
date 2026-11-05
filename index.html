@@ -1785,9 +1785,9 @@ async function ntAsk(){if(!('Notification' in window)){toast(isIOS?'Instala la a
   if(p!=='granted'){toast(isIOS&&!standalone()?'Instala la app en tu inicio para recibir avisos':'Los avisos están bloqueados: actívalos en la configuración del teléfono');return false}
   S.nt.on=true;store('pt_nt',S.nt);try{localStorage.setItem('pt_ntask','1')}catch(e){}notify('¡Listo! Avisos activados','Solo te aviso de tus equipos y los partidos que sigas','tutus-on');checkFavGames().catch(()=>{});pushSubscribe().catch(()=>{});return true}
 /* Push con la app cerrada: se activa cuando exista el servidor (NT_SERVER) */
-const NT_SERVER='';const NT_VAPID='';
-async function pushSubscribe(){if(!NT_SERVER||!NT_VAPID||!('serviceWorker' in navigator)||!('PushManager' in window))return;const reg=await navigator.serviceWorker.ready;
-  let sub=await reg.pushManager.getSubscription();if(!sub){const k=Uint8Array.from(atob(NT_VAPID.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:k})}
+const NT_SERVER='https://tutus-avisos.netlify.app';
+async function pushSubscribe(){if(!NT_SERVER||!ntOn()||!('serviceWorker' in navigator)||!('PushManager' in window))return;const reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();if(!sub){const vk=(await fetch(NT_SERVER+'/vapid').then(r=>r.json())).key;const b=vk.replace(/-/g,'+').replace(/_/g,'/');const k=Uint8Array.from(atob(b+'='.repeat((4-b.length%4)%4)),c=>c.charCodeAt(0));sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:k})}
   const items=S.favs.map(f=>({t:'team',lg:f.lg,id:f.id,p:S.ntp[ntKeyT(f.lg,f.id)]||ntDefaults(LG[f.lg].kind)})).concat(S.favGames.map(x=>({t:'game',lg:x.lg,k:x.k,p:S.ntp[ntKeyG(x.k)]||ntDefaults(LG[x.lg].kind)})));
   await fetch(NT_SERVER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sub,items,parlay:!!S.nt.parlay})})}
 function ntSync(){pushSubscribe().catch(()=>{})}
@@ -2364,7 +2364,7 @@ const ACT={
   ptlg(d){const s=S.sheet;s.lg=d.v;renderSheet();loadTeams(d.v).then(()=>{if(S.sheet===s)renderSheet(true)})},
   install(){if(instEvt){instEvt.prompt();instEvt.userChoice.finally(()=>{instEvt=null;renderMain()})}},
   instX(){store('pt_inst_x',1);renderMain()},
-  async ntTog(){if(ntOn()){S.nt.on=false;store('pt_nt',S.nt)}else await ntAsk();renderMain();if(S.sheet)renderSheet(true)},
+  async ntTog(){if(ntOn()){S.nt.on=false;store('pt_nt',S.nt);try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub){await fetch(NT_SERVER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sub,items:[]})});await sub.unsubscribe()}}catch(e){}}else await ntAsk();renderMain();if(S.sheet)renderSheet(true)},
   ntOpt(d){S.nt[d.v]=!S.nt[d.v];store('pt_nt',S.nt);ntSync();renderMain();if(S.sheet)renderSheet(true)},
   ntOpen(){openSheet({type:'nt'},!!S.sheet)},
   ntItem(d){openSheet({type:'ntf',key:d.k},true)},
@@ -2532,7 +2532,7 @@ const MOCK=(()=>{
   renderMain();
   for(const b of BASES){try{const c=new AbortController();const to=setTimeout(()=>c.abort(),6000);const r=await fetch(b+'basketball/nba/scoreboard',{signal:c.signal,cache:'no-store'});clearTimeout(to);if(!r.ok)throw 0;await r.json();BASE=b;S.mode='live';break}catch(e){}}
   if(S.mode!=='live')S.mode='demo';
-  load();renderMain();await sync();startLoop();maybeAskNt();
+  load();renderMain();await sync();startLoop();maybeAskNt();ntSync();
   try{const gk=new URLSearchParams(location.search).get('g');if(gk&&S.ev[gk])openGameDetail(gk)}catch(e){}
   if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{const k=e.data&&e.data.open;if(k){if(S.ev[k])openGameDetail(k);else{const lg=k.split(':')[0];loadDay(0,[lg]).then(()=>{if(S.ev[k])openGameDetail(k)})}}});
   if('serviceWorker' in navigator&&location.protocol==='https:'&&window.top===window){try{navigator.serviceWorker.register('sw.js')}catch(e){}}
