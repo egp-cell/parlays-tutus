@@ -892,7 +892,9 @@ async function sync(){
   await Promise.all([...keys].map(async k=>{const e=S.ev[k];if(e&&e.full&&e.g.state==='post')return;
     if(e&&e.full&&e.g.state==='pre'&&new Date(e.g.date)-Date.now()>20*6e4&&Date.now()-e.at<10*6e4)return;
     try{await fetchEvent(k)}catch(err){}}));
-  if(S.tab==='games')await loadDay(S.games.off,null,true);
+  S.tick=(S.tick||0)+1;
+  if(S.tab==='games'){const dt=ymd(S.games.off);const live=LEAGUES.map(l=>l.id).filter(id=>(S.day[id+'|'+dt]?.list||[]).some(g0=>{const g=S.ev[g0.key]?.g||g0;return g.state==='in'||(g.state==='pre'&&Math.abs(new Date(g.date)-Date.now())<6*6e4)}));
+    await loadDay(S.games.off,(S.tick%3===0||!live.length)?null:live,true)}
   if(S.sheet?.type==='gd'){const e=S.ev[S.sheet.key];if(!e||e.g.state!=='post'||!S.det[S.sheet.key])await fetchDetail(S.sheet.key).catch(()=>{})}
   if(S.tab==='teams')await loadFavScheds(true);
   if(S.nt.on)await checkFavGames().catch(()=>{});
@@ -901,7 +903,11 @@ async function sync(){
   trackChanges(firstSync);firstSync=false;settle();S.lastSync=Date.now();syncing=false;
   renderMain();if(S.sheet&&['parlay','leg','gd'].includes(S.sheet.type))renderSheet(true);
 }
-function startLoop(){clearInterval(timer);timer=setInterval(sync,S.mode==='demo'?5000:30000)}
+// Cada 10 s si hay partidos en vivo, 30 s si no; con la app en segundo plano, cada minuto (para los avisos)
+function liveNow(){const t=ymd(0);return Object.keys(S.day).some(k=>k.endsWith('|'+t)&&(S.day[k].list||[]).some(g=>(S.ev[g.key]?.g||g).state==='in'))||Object.values(S.ev).some(e=>e&&e.g&&e.g.state==='in')}
+function nextGap(){if(S.mode==='demo')return 5000;if(document.visibilityState==='hidden')return 60000;return liveNow()?10000:30000}
+function startLoop(){clearTimeout(timer);const run=async()=>{try{await sync()}catch(e){syncing=false}timer=setTimeout(run,nextGap())};timer=setTimeout(run,nextGap())}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&timer){clearTimeout(timer);startLoop();sync()}});
 async function loadDay(off,ids,silent){
   const date=ymd(off);ids=ids||(S.games.lg==='all'?LEAGUES.map(l=>l.id):[S.games.lg]);
   await Promise.all(ids.map(async id=>{const k=id+'|'+date;const cur=S.day[k];
