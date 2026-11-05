@@ -625,6 +625,29 @@ button.bnr{width:100%;text-align:left}
 .plst b{font-size:18px;font-weight:800} .plst span{font-size:11px;color:var(--faint);font-weight:600}
 .tbl td .av{--s:28px;display:inline-grid;vertical-align:middle;margin-right:8px}
 .tbl td .av .tl{display:none}
+.fhead{display:flex;align-items:center;gap:8px;margin:6px 0 8px;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--fg)}
+.fhead b{font-size:11px;background:var(--accent);color:#fff;border-radius:999px;padding:1px 7px;letter-spacing:0}
+.fstrip{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;margin:0 -16px 14px;padding:2px 16px 4px;scroll-snap-type:x mandatory;scroll-padding-inline:16px}
+.fstrip::-webkit-scrollbar{display:none}
+.fc{flex:none;width:186px;scroll-snap-align:start;text-align:left;border-radius:18px;padding:12px 14px 12px;position:relative;overflow:hidden;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(255,61,0,.16),transparent 60%),linear-gradient(180deg,#1E1E1E,#141414);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.fc.fol{border-color:var(--line-accent)}
+.fc.live{border-color:rgba(240,68,56,.55)}
+.fc.live::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,var(--loss),#ff8a3d)}
+.fc .fh{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:10px;min-width:0}
+.fc .fh>span:not(.fst){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc .fh .tl{--s:16px}
+.fst{margin-left:auto;flex:none;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:var(--surface-3);color:var(--fg);display:inline-flex;align-items:center;gap:5px}
+.fst.lv{background:rgba(240,68,56,.18);color:#FF6B5E}
+.fst.lv i{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 1.2s infinite}
+.fr{display:flex;align-items:center;gap:9px;height:36px}
+.fr .tl{--s:30px}
+.fr b{font-size:16px;font-weight:800;letter-spacing:-.01em}
+.fr .fn{display:none}
+.fr .fs{margin-left:auto;font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1}
+.fr .fs em{font-style:normal;font-size:12px;font-weight:700;background:var(--surface-3);border-radius:7px;padding:2px 7px;color:var(--fg)}
+.fr.lo b,.fr.lo .fs{color:var(--faint)}
+.fc .ft{margin-top:8px;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#FFB020}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -888,7 +911,7 @@ async function fetchEvent(k){const[lg,id]=k.split(':');const j=await api.summary
   if(!g.odds&&old&&old.g)g.odds=old.g.odds;S.ev[k]={g,stats:playerStats(j),full:true,at:Date.now()};return S.ev[k]}
 async function sync(){
   if(syncing)return;syncing=true;if(S.mode==='demo')MOCK.tick();
-  const keys=new Set();S.parlays.filter(p=>!p.settled).forEach(p=>p.legs.forEach(l=>keys.add(l.key)));
+  const keys=new Set();S.parlays.filter(p=>!p.settled).forEach(p=>p.legs.forEach(l=>keys.add(l.key)));S.favGames.forEach(x=>keys.add(x.k));
   await Promise.all([...keys].map(async k=>{const e=S.ev[k];if(e&&e.full&&e.g.state==='post')return;
     if(e&&e.full&&e.g.state==='pre'&&new Date(e.g.date)-Date.now()>20*6e4&&Date.now()-e.at<10*6e4)return;
     try{await fetchEvent(k)}catch(err){}}));
@@ -994,14 +1017,16 @@ function viewGames(){
   const lgs=[{id:'all',name:'Todas'}].concat(ordered).map(l=>{const n=l.id!=='all'?cnt(l.id):0;return `<button class="lchip" data-a="lg" data-v="${l.id}" aria-pressed="${l.id===lg}">${l.id==='all'?`<span class="tl lgl allic">${IC.grid}</span>`:lgLogo(l,34)}<span class="ln">${l.id==='all'?'Todas':esc(l.short||l.name)}</span>${n?`<span class="n">${n}</span>`:''}${S.favLg.includes(l.id)?'<span class="pin"></span>':''}</button>`}).join('');
   const ids=lg==='all'?ordered.map(l=>l.id):[lg];let body='',loading=false,any=false;
   const favG=[];ids.forEach(id=>{const d=S.day[id+'|'+date];if(d&&d.list)d.list.forEach(g0=>{const g=S.ev[g0.key]?.g||g0;if(isFav(g.lg,g.away.id)||isFav(g.lg,g.home.id))favG.push(g)})});
-  if(favG.length)body+=`<div class="sec"><span>Tus equipos</span><span>${favG.length}</span></div>`+`<div class="glist">${favG.map(gameRow).join('')}</div>`;
+  const sameDay=d=>ymdOf(d)===date;const fol=favGamesList().filter(g=>g.state==='in'||sameDay(g.date));const seenF=new Set(fol.map(g=>g.key));
+  const feat=fol.concat(ids.length>1||true?favG.filter(g=>!seenF.has(g.key)):[]);
+  const strip=feat.length?`<div class="fhead"><span>${fol.length?'Siguiendo':'Tus equipos'}</span><b>${feat.length}</b></div><div class="fstrip">${feat.map(g=>featCard(g,seenF.has(g.key))).join('')}</div>`:'';
   ids.forEach(id=>{const d=S.day[id+'|'+date];if(!d||d.loading){loading=true;return}if(!d.list.length)return;any=true;
     const list=d.list.map(g=>S.ev[g.key]?.g||g).sort((a,b)=>({in:0,pre:1,post:2}[a.state]-{in:0,pre:1,post:2}[b.state])||new Date(a.date)-new Date(b.date));
     body+=`<div class="sec lsec"><button class="seclink" data-a="openLeague" data-v="${id}">${lgLogo(LG[id],24)}<span>${esc(LG[id].name)}</span><i>›</i></button><span>${d.list.length}</span></div><div class="glist">`+list.map(gameRow).join('')+'</div>'});
   if(!any&&loading)body='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   else if(!any)body=`<div class="empty"><h3>Sin partidos</h3><p>No hay juegos ${lg==='all'?'':'de '+LG[lg].name+' '}para ${dayLabel(off).toLowerCase()}.</p></div>`;
   else if(loading)body+='<div class="skel"></div>';
-  return installBanner()+`<div class="stick"><div class="chips">${days}</div></div><div class="chips lchips">${lgs}</div><div data-swipe="swday" style="min-height:60vh">${body}</div>`}
+  return installBanner()+`<div class="stick"><div class="chips">${days}</div></div>${strip}<div class="chips lchips">${lgs}</div><div data-swipe="swday" style="min-height:60vh">${body}</div>`}
 function gameRow(g){
   const mine=S.parlays.some(p=>!p.settled&&p.legs.some(l=>l.key===g.key));const pre=g.state==='pre',live=g.state==='in';
   const lo=(t,o)=>g.state==='post'&&t.score<o.score?'lo':'';
@@ -1378,7 +1403,7 @@ function miniGame(g,teamId){
 function viewTeams(){
   const seg=`<div class="seg"><button data-a="ftab" data-v="lg" aria-pressed="${S.ftab==='lg'}">Ligas${S.favLg.length?' · '+S.favLg.length:''}</button><button data-a="ftab" data-v="eq" aria-pressed="${S.ftab!=='lg'}">Equipos${S.favs.length?' · '+S.favs.length:''}</button></div>`;
   if(S.ftab==='lg')return installBanner()+seg+viewFavLeagues();
-  const fgs=favGamesList();const fgH=fgs.length?`<div class="sec"><span>Tus partidos</span><span>${fgs.length}</span></div><div class="glist">${fgs.map(gameRow).join('')}</div>${S.favs.length?'<div class="sec"><span>Tus equipos</span></div>':''}`:'';
+  const fgs=favGamesList();const fgH=fgs.length?`<div class="fhead"><span>Siguiendo</span><b>${fgs.length}</b></div><div class="fstrip">${fgs.map(g=>featCard(g,true)).join('')}</div>${S.favs.length?'<div class="sec"><span>Tus equipos</span></div>':''}`:'';
   if(!S.favs.length)return installBanner()+seg+fgH+`<div class="empty" style="padding-top:24px"><h3>Sigue a tus equipos</h3><p>Elige tus equipos favoritos y aquí ves su partido en vivo, el próximo y sus resultados.</p><button class="btn pri" data-a="pickTeams" style="margin:16px auto 0">Elegir equipos</button></div>`;
   return installBanner()+seg+notifCard()+fgH+S.favs.map(f=>{const tg=teamGames(f);let rows='';
     if(!tg)rows='<div class="skel" style="margin:0 14px 12px;height:44px"></div>';
@@ -1648,6 +1673,16 @@ function sheetPlayer(s){const c=S.ath[s.lg+':'+s.pid]||{};const a=c.a;const L=LG
   if(st&&st.splits&&st.splits.length){const lab=st.labels||[];h+=`<span class="flabel">Temporada</span><div class="tblw"><table class="tbl"><thead><tr><th>Competencia</th>${lab.map(l=>`<th>${esc(OVL[l]||l)}</th>`).join('')}</tr></thead><tbody>${st.splits.map(sp=>`<tr><td><b>${esc(String(sp.displayName||'').replace(/^\d{4}(-\d{2})?\s*/,''))}</b></td>${(sp.stats||[]).map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`}
   else if('o' in c&&a)h+='<div class="note">ESPN no trae estadísticas de temporada de este jugador.</div>';
   return {title:esc((a&&a.shortName)||s.nm)+`<div class="sh-sub">${esc(L.name||'')}</div>`,html:h}}
+
+
+/* ================= Partidos que sigues: tarjetas destacadas (estilo marcador de TV) ================= */
+const ymdOf=d=>{const x=new Date(d);return `${x.getFullYear()}${String(x.getMonth()+1).padStart(2,'0')}${String(x.getDate()).padStart(2,'0')}`};
+function featCard(g,followed){const L=LG[g.lg]||{};const pre=g.state==='pre',live=g.state==='in',post=g.state==='post';const mine=S.parlays.some(p=>!p.settled&&p.legs.some(l=>l.key===g.key));
+  const st=live?`<span class="fst lv"><i></i>${esc(g.detail)}</span>`:pre?`<span class="fst">${esc(ymdOf(g.date)===ymd(0)?hhmm(g.date):new Date(g.date).toLocaleDateString('es-MX',{weekday:'short',day:'numeric'}).replace('.','')+' · '+hhmm(g.date))}</span>`:`<span class="fst">Final</span>`;
+  const lo=(t,o)=>post&&t.score<o.score?'lo':'';const ml=(g.odds&&g.odds.ml)||{};
+  const row=(t,o,m)=>`<div class="fr ${lo(t,o)}">${logo(t,30)}<b>${esc(t.abbr||t.name)}</b><span class="fn">${esc(t.name)}</span><span class="fs">${pre?(m?`<em>${esc(m)}</em>`:''):t.score}</span></div>`;
+  const tag=[followed?'★ Siguiendo':(isFav(g.lg,g.home.id)||isFav(g.lg,g.away.id))?'★ Tu equipo':'',mine?'Parlay':''].filter(Boolean).join(' · ');
+  return `<button class="fc ${live?'live':''} ${followed?'fol':''}" data-a="openGame" data-k="${g.key}"><div class="fh">${lgLogo(L,16)}<span>${esc(L.short||L.name||'')}</span>${st}</div>${row(g.away,g.home,ml.a)}${row(g.home,g.away,ml.h)}${tag?`<div class="ft">${tag}</div>`:''}</button>`}
 
 /* ---------- Detalle ---------- */
 function sheetParlay(s){
