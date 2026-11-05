@@ -1017,8 +1017,8 @@ function viewGames(){
   const lgs=[{id:'all',name:'Todas'}].concat(ordered).map(l=>{const n=l.id!=='all'?cnt(l.id):0;return `<button class="lchip" data-a="lg" data-v="${l.id}" aria-pressed="${l.id===lg}">${l.id==='all'?`<span class="tl lgl allic">${IC.grid}</span>`:lgLogo(l,34)}<span class="ln">${l.id==='all'?'Todas':esc(l.short||l.name)}</span>${n?`<span class="n">${n}</span>`:''}${S.favLg.includes(l.id)?'<span class="pin"></span>':''}</button>`}).join('');
   const ids=lg==='all'?ordered.map(l=>l.id):[lg];let body='',loading=false,any=false;
   const favG=[];ids.forEach(id=>{const d=S.day[id+'|'+date];if(d&&d.list)d.list.forEach(g0=>{const g=S.ev[g0.key]?.g||g0;if(isFav(g.lg,g.away.id)||isFav(g.lg,g.home.id))favG.push(g)})});
-  const sameDay=d=>ymdOf(d)===date;const fol=favGamesList().filter(g=>g.state==='in'||sameDay(g.date));const seenF=new Set(fol.map(g=>g.key));
-  const feat=fol.concat(ids.length>1||true?favG.filter(g=>!seenF.has(g.key)):[]);
+  const sameDay=d=>ymdOf(d)===date;const fol=favGamesList().filter(g=>g.state!=='post'&&(g.state==='in'||sameDay(g.date)));const seenF=new Set(fol.map(g=>g.key));
+  const feat=fol.concat(favG.filter(g=>g.state!=='post'&&!seenF.has(g.key)));
   const strip=feat.length?`<div class="fhead"><span>${fol.length?'Siguiendo':'Tus equipos'}</span><b>${feat.length}</b></div><div class="fstrip">${feat.map(g=>featCard(g,seenF.has(g.key))).join('')}</div>`:'';
   ids.forEach(id=>{const d=S.day[id+'|'+date];if(!d||d.loading){loading=true;return}if(!d.list.length)return;any=true;
     const list=d.list.map(g=>S.ev[g.key]?.g||g).sort((a,b)=>({in:0,pre:1,post:2}[a.state]-{in:0,pre:1,post:2}[b.state])||new Date(a.date)-new Date(b.date));
@@ -1403,7 +1403,7 @@ function miniGame(g,teamId){
 function viewTeams(){
   const seg=`<div class="seg"><button data-a="ftab" data-v="lg" aria-pressed="${S.ftab==='lg'}">Ligas${S.favLg.length?' · '+S.favLg.length:''}</button><button data-a="ftab" data-v="eq" aria-pressed="${S.ftab!=='lg'}">Equipos${S.favs.length?' · '+S.favs.length:''}</button></div>`;
   if(S.ftab==='lg')return installBanner()+seg+viewFavLeagues();
-  const fgs=favGamesList();const fgH=fgs.length?`<div class="fhead"><span>Siguiendo</span><b>${fgs.length}</b></div><div class="fstrip">${fgs.map(g=>featCard(g,true)).join('')}</div>${S.favs.length?'<div class="sec"><span>Tus equipos</span></div>':''}`:'';
+  const fgs=favGamesList().filter(g=>g.state!=='post');const fgH=fgs.length?`<div class="fhead"><span>Siguiendo</span><b>${fgs.length}</b></div><div class="fstrip">${fgs.map(g=>featCard(g,true)).join('')}</div>${S.favs.length?'<div class="sec"><span>Tus equipos</span></div>':''}`:'';
   if(!S.favs.length)return installBanner()+seg+fgH+`<div class="empty" style="padding-top:24px"><h3>Sigue a tus equipos</h3><p>Elige tus equipos favoritos y aquí ves su partido en vivo, el próximo y sus resultados.</p><button class="btn pri" data-a="pickTeams" style="margin:16px auto 0">Elegir equipos</button></div>`;
   return installBanner()+seg+notifCard()+fgH+S.favs.map(f=>{const tg=teamGames(f);let rows='';
     if(!tg)rows='<div class="skel" style="margin:0 14px 12px;height:44px"></div>';
