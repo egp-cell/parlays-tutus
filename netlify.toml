@@ -1,7 +1,7 @@
 # Servidor de avisos de Tutus Score (Netlify, gratis).
 # La app sigue viviendo en GitHub Pages; aquí solo corren las funciones de avisos.
 [build]
-  publish = "netlify/public"
+  publish = "."
   command = "echo listo"
 
 [functions]
