@@ -301,6 +301,11 @@ main::-webkit-scrollbar{display:none}
 .found{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:6px;font-size:13.5px;color:var(--muted)}
 .found b{color:var(--fg)}
 .found ul{margin:6px 0 0;padding-left:18px}
+.early{display:flex;align-items:center;gap:12px;margin:14px 0;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.early .et b{display:block;font-size:14.5px;font-weight:700} .early .et span{font-size:12.5px;color:var(--muted)}
+.sw{flex:none;width:46px;height:28px;border-radius:999px;background:var(--surface-3);position:relative;transition:background .2s}
+.sw i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .2s}
+.sw[aria-checked="true"]{background:var(--accent)} .sw[aria-checked="true"] i{transform:translateX(18px)}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -354,6 +359,7 @@ const PROPS={
   hockey:[['g','Gol',['G'],0.5,'g'],['a','Asistencias',['A'],0.5,'a'],['p','Puntos',s=>sumK(s,['G','A']),0.5,'pts'],['sog','Tiros a gol',['SOG','S'],2.5,'tiros'],['sv','Atajadas',['SV'],26.5,'ataj']],
   soccer:[['g','Anota gol',['totalGoals'],0.5,'gol'],['a','Asistencia',['goalAssists'],0.5,'ast'],['sh','Tiros',['totalShots'],1.5,'tiros'],['sot','Tiros a puerta',['shotsOnTarget'],0.5,'a puerta']],
 };
+const EARLY={soccer:2,basketball:20,football:17,baseball:5,hockey:3};
 const YESNO=new Set(['td','g','hr']);
 const propDef=(kind,k)=>(PROPS[kind]||[]).find(p=>p[0]===k);
 function pick(s,keys){for(const k of keys){if(s&&s[k]!=null)return s[k]}return null}
@@ -437,7 +443,7 @@ function load(){S.parlays=store(K()+'_parlays')||(S.mode==='demo'?MOCK.seedParla
 function legTitle(L){if(L.type==='prop')return L.athleteName;if(L.type==='ml')return L.side==='draw'?'Empate':`${L.teamName||L.teamAbbr} gana`;if(L.type==='spread')return `${L.teamName||L.teamAbbr} ${signed(L.line)}`;return `${L.ou==='over'?'Más':'Menos'} de ${L.line}`}
 function legSub(L){const kind=LG[L.lg]?.kind;
   if(L.type==='prop'){const d=propDef(kind,L.market);const lab=d?d[1]:L.market;if(L.ou==='over'&&L.line===0.5&&YESNO.has(L.market))return `${lab} · ${L.teamAbbr}`;return `${lab} · ${L.ou==='over'?'Más':'Menos'} de ${L.line}`}
-  if(L.type==='total')return `Total del partido · ${L.matchup}`;return `${L.type==='ml'?'Ganador':'Hándicap'} · ${L.matchup}`}
+  if(L.type==='total')return `Total del partido · ${L.matchup}`;if(L.type==='ml'&&L.early)return `Ganador · pago anticipado +${L.early} · ${L.matchup}`;return `${L.type==='ml'?'Ganador':'Hándicap'} · ${L.matchup}`}
 function gameLine(g){return g.state==='pre'?`${g.away.abbr} @ ${g.home.abbr} · ${g.detail}`:`${g.away.abbr} ${g.away.score}–${g.home.score} ${g.home.abbr} · ${g.detail}`}
 function evalLeg(L){
   if(L.final)return L.final;
@@ -450,7 +456,8 @@ function evalLeg(L){
   if(L.type==='ml'){
     if(L.side==='draw'){const d=g.home.score-g.away.score;r.status=fin?(d===0?'won':'lost'):(d===0?'winning':'losing');r.v=`${g.away.score}-${g.home.score}`;r.msg=d===0?(fin?'Quedó empate':'Van empatados'):(fin?'No hubo empate':'No hay empate')}
     else{const d=me.score-op.score;r.status=wl(d,kind==='soccer');r.v=signed(d);
-      r.msg=fin?(d>0?`Ganó por ${d}`:d<0?`Perdió por ${-d}`:'Empate'):(d>0?`Gana por ${d}`:d<0?`Pierde por ${-d}`:'Van empatados')}
+      r.msg=fin?(d>0?`Ganó por ${d}`:d<0?`Perdió por ${-d}`:'Empate'):(d>0?`Gana por ${d}`:d<0?`Pierde por ${-d}`:'Van empatados');
+      if(L.early){const mx=Math.max(L.maxLead||0,d);if(mx>=L.early){r.status='won';r.msg=`Pago anticipado · llegó a +${mx}`}else if(!fin){r.msg+=` · paga a +${L.early}`}}}
   }else if(L.type==='spread'){
     const d=Math.round((me.score+L.line-op.score)*10)/10;r.status=wl(d,false);r.v=signed(d);
     r.msg=d>0?(fin?`Cubrió por ${d}`:`Cubre por ${d}`):d<0?(fin?`No cubrió por ${-d}`:`Le faltan ${-d}`):'Justo en la línea';
@@ -502,6 +509,8 @@ async function sync(){
     if(e&&e.full&&e.g.state==='pre'&&new Date(e.g.date)-Date.now()>20*6e4&&Date.now()-e.at<10*6e4)return;
     try{await fetchEvent(k)}catch(err){}}));
   if(S.tab==='games')await loadDay(S.games.off,null,true);
+  let ml=false;S.parlays.filter(p=>!p.settled).forEach(P=>P.legs.forEach(L=>{if(L.type!=='ml'||!L.early||L.final||L.side==='draw')return;const g=S.ev[L.key]?.g;if(!g||g.state==='pre')return;
+    const me=L.side==='home'?g.home:g.away,op=L.side==='home'?g.away:g.home;const d=me.score-op.score;if(d>(L.maxLead||0)){L.maxLead=d;ml=true}}));if(ml)save();
   trackChanges(firstSync);firstSync=false;settle();S.lastSync=Date.now();syncing=false;
   renderMain();if(S.sheet&&['parlay','leg'].includes(S.sheet.type))renderSheet(true);
 }
@@ -674,7 +683,10 @@ function buildGame(s){
   const pickBtn=(q,top,inner)=>`<button class="pick" style="--c:${esc(q.teamColor||'#5a6577')}" data-a="toggleLeg" data-q="${qAttr(q)}" aria-pressed="${!!inDraft(q)}">${inner}<small>${inDraft(q)?'✓ En tu parlay':esc(top)}</small></button>`;
   const T=(side,t)=>({side,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamAlt:t.alt,teamLogo:t.logo});
   if(s.gtab==='ml'){
-    h+=`<div class="picks">${pickBtn({...base,type:'ml',...T('away',g.away)},'Gana',`${logo(g.away)}<span>${esc(g.away.name)}</span>`)}${kind==='soccer'?pickBtn({...base,type:'ml',side:'draw',teamAbbr:'X',teamName:'Empate'},'Empate',`${logo({abbr:'X',color:'#5a6577'})}<span>Empate</span>`):''}${pickBtn({...base,type:'ml',...T('home',g.home)},'Gana',`${logo(g.home)}<span>${esc(g.home.name)}</span>`)}</div>`;
+    const ea=s.early?{early:s.early}:{};
+    h+=`<div class="early"><button class="sw" role="switch" aria-checked="${!!s.early}" data-a="earlyTog" aria-label="Pago anticipado"><i></i></button><div class="et"><b>Pago anticipado</b><span>Cobra si en algún momento va ganando por la ventaja que marca tu casino</span></div></div>`;
+    if(s.early)h+=`<div class="line"><button data-a="earlyStep" data-d="-1" aria-label="Menos ventaja">−</button><div class="inp num" style="display:grid;place-items:center">+${s.early}</div><button data-a="earlyStep" data-d="1" aria-label="Más ventaja">+</button></div><p class="help" style="margin:-8px 0 12px">Ajusta la ventaja y luego toca el equipo.</p>`;
+    h+=`<div class="picks">${pickBtn({...base,type:'ml',...T('away',g.away),...ea},'Gana',`${logo(g.away)}<span>${esc(g.away.name)}</span>`)}${kind==='soccer'?pickBtn({...base,type:'ml',side:'draw',teamAbbr:'X',teamName:'Empate'},'Empate',`${logo({abbr:'X',color:'#5a6577'})}<span>Empate</span>`):''}${pickBtn({...base,type:'ml',...T('home',g.home),...ea},'Gana',`${logo(g.home)}<span>${esc(g.home.name)}</span>`)}</div>`;
   }else if(s.gtab==='spread'){
     const hs=s.spread??(o.homeSpread??(kind==='soccer'||kind==='hockey'||kind==='baseball'?-1.5:-3.5));
     h+=`<span class="flabel">Línea de ${esc(g.home.name)}${o.details?' · ESPN '+esc(o.details):''}</span>${lineInput('spread',hs)}`;
@@ -753,7 +765,7 @@ function idxTeam(ix,name){const t=norm(name).trim();if(!t)return null;
 function legFromCand(c){
   if(c.kind==='prop'){const p=c.p,g=p.g;return {...legBase(g),type:'prop',athleteId:p.id,athleteName:p.name,head:p.head,side:p.side,teamAbbr:p.t.abbr,teamColor:p.t.color,teamAlt:p.t.alt,teamLogo:p.t.logo,market:c.market,line:c.line,ou:c.ou}}
   const{g,side,t}=c.tm;const T={side,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamAlt:t.alt,teamLogo:t.logo};
-  if(c.kind==='ml')return c.draw?{...legBase(g),type:'ml',side:'draw',teamAbbr:'X',teamName:'Empate'}:{...legBase(g),type:'ml',...T};
+  if(c.kind==='ml')return c.draw?{...legBase(g),type:'ml',side:'draw',teamAbbr:'X',teamName:'Empate'}:{...legBase(g),type:'ml',...T,...(c.early?{early:c.early}:{})};
   if(c.kind==='spread')return {...legBase(g),type:'spread',...T,line:c.line};
   return {...legBase(g),type:'total',line:c.line,ou:c.ou}}
 function moneyNum(x){if(x==null)return null;const n=Number(String(x).replace(/[^\d.]/g,''));return n>0?n:null}
@@ -764,7 +776,7 @@ async function readWithClaude(files,ix){
   const prompt=`Las imágenes son capturas de un mismo boleto de apuesta (parlay) de un casino en línea, en orden; puede venir partido en varias capturas. Extrae cada selección sin repetir.
 Responde SOLO con JSON con esta forma:
 {"stake":número o null,"odds":"momio total del boleto tal cual aparece (americano como +550 o decimal como 6.50)" o null,"payout":número o null,
- "legs":[{"kind":"prop|ml|spread|total","player":"nombre completo del jugador o null","team":"equipo de esa selección o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate}]}
+ "legs":[{"kind":"prop|ml|spread|total","player":"nombre completo del jugador o null","team":"equipo de esa selección o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate,"early":número de ventaja si la selección tiene pago anticipado o null}]}
 Reglas: "prop" es estadística de un jugador; "ml" es ganador; "spread" es hándicap (line con su signo); "total" es altas/bajas del partido (team = cualquiera de los dos equipos).
 "Anota TD" o "anota gol" en cualquier momento es prop con line 0.5 y ou "over".
 Claves de mercado por deporte:
@@ -810,7 +822,8 @@ function parseOcr(text,ix){
     if(tms.length!==1)continue;const tm=tms[0];ctx=tm;
     const sp=l.match(/(?:^|\s)([+-]\d{1,2}(?:[.,]5)?)(?!\d)/);
     if(sp){const k='s'+tm.g.key+tm.side;if(!seen.has(k)){seen.add(k);legs.push({kind:'spread',tm,line:Number(sp[1].replace(',','.'))})}}
-    else{const k='m'+tm.g.key+tm.side;if(!seen.has(k)){seen.add(k);legs.push({kind:'ml',tm})}}
+    else{const k='m'+tm.g.key+tm.side;const ew=l+' '+(L[i+1]||'');const em=ew.match(/(pago anticipado|early payout|pago adelantado)/);const ev=(ew.match(/(\d{1,2})\s*(goles|puntos|carreras|points|goals|runs)/)||[])[1];
+      if(!seen.has(k)){seen.add(k);legs.push({kind:'ml',tm,early:em?(Number(ev)||EARLY[LG[tm.g.lg].kind]):null})}}
   }
   const all=L.join(' ');
   const stake=moneyNum((all.match(/(apuesta|monto|importe|stake|wager|apostado|cantidad)[^\d$]{0,20}\$?\s*([\d,]+(?:\.\d+)?)/)||[])[2]);
@@ -825,7 +838,7 @@ function resolveClaude(data,ix){
       const market=propDef(kind,l.market)?l.market:marketFrom(kind,norm(l.market||''));if(!market){unknown.push(desc);return}
       out.push({kind:'prop',p,market,line:Number(l.line),ou:l.ou==='under'?'under':'over'})}
     else{const tm=idxTeam(ix,l.team||'');if(!tm){unknown.push(desc);return}
-      if(l.kind==='ml')out.push({kind:'ml',tm,draw:!!l.draw});
+      if(l.kind==='ml')out.push({kind:'ml',tm,draw:!!l.draw,early:l.early?(Number(l.early)||EARLY[LG[tm.g.lg].kind]):null});
       else if(l.kind==='spread'&&l.line!=null)out.push({kind:'spread',tm,line:Number(l.line)});
       else if(l.kind==='total'&&l.line!=null)out.push({kind:'total',tm,line:Number(l.line),ou:l.ou==='under'?'under':'over'});
       else unknown.push(desc)}});
@@ -900,6 +913,8 @@ const ACT={
     if(ex){S.draft.legs=S.draft.legs.filter(l=>l!==ex)}else{S.draft.legs.push({...q,id:uid()});toast(`Agregado: ${q.type==='prop'?q.athleteName.split(' ').slice(-1)[0]+' · ':''}${q.type==='prop'?legSub(q):legTitle(q)}`);
       if(s.view==='player'){s.view=s.pfrom==='game'?'game':'home';if(s.view==='home')s.q=''}}
     save();renderSheet(true);renderMain()},
+  earlyTog(){const s=S.sheet;const k=LG[S.ev[s.key].g.lg].kind;s.early=s.early?null:(EARLY[k]||2);renderSheet(true)},
+  earlyStep(d){const s=S.sheet;s.early=Math.max(1,(s.early||1)+Number(d.d));renderSheet(true)},
   pickShot(){const i=$('#shotIn');if(i)i.click()},
   rmLeg(d){S.draft.legs.splice(Number(d.i),1);save();renderSheet(true);renderMain()},
   saveDraft(){const dr=S.draft;const stake=Number(String(dr.stake).replace(/[$,]/g,''));
