@@ -707,6 +707,9 @@ const LEAGUES=[
   {id:'ncaab',name:'NCAA Basketball',short:'NCAA BB',sport:'basketball',league:'mens-college-basketball',kind:'basketball',hs:'mens-college-basketball',web:'mens-college-basketball/game/_/gameId/'},
   {id:'wnba',name:'WNBA',sport:'basketball',league:'wnba',kind:'basketball',hs:'wnba',web:'wnba/game/_/gameId/',pro:1},
 ];
+// Orden por lo que más se ve en México (las favoritas del usuario siempre van antes)
+const POP=['nfl','ucl','ligamx','epl','laliga','nba','mlb','uel','mls','concachamp','seriea','bundes','ligue1','lib','nhl','cfb','uecl','port','ered','champ','arg','bra','tur','sco','ncaab','wnba'];
+LEAGUES.sort((a,b)=>{const i=POP.indexOf(a.id),j=POP.indexOf(b.id);return (i<0?99:i)-(j<0?99:j)});
 const LG=Object.fromEntries(LEAGUES.map(l=>[l.id,l]));
 
 /* ================= Props: [clave, etiqueta, llaves ESPN | fn, línea default, corto] ================= */
@@ -1034,7 +1037,7 @@ function viewGames(){
   const{off,lg}=S.games;const date=ymd(off);
   const days=[-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7].map(o=>`<button class="chip" data-a="day" data-v="${o}" aria-pressed="${o===off}">${dayLabel(o)}</button>`).join('');
   const pr=id=>{const i=S.favLg.indexOf(id);return i<0?999:i};const cnt=id=>{const d=S.day[id+'|'+date];return d&&d.list?d.list.length:0};
-  const ordered=[...LEAGUES].sort((a,b)=>pr(a.id)-pr(b.id)||((cnt(b.id)>0)-(cnt(a.id)>0)));
+  const ordered=[...LEAGUES].sort((a,b)=>pr(a.id)-pr(b.id));
   const lgs=[{id:'all',name:'Todas'}].concat(ordered).map(l=>{const n=l.id!=='all'?cnt(l.id):0;return `<button class="lchip" data-a="lg" data-v="${l.id}" aria-pressed="${l.id===lg}">${l.id==='all'?`<span class="tl lgl allic">${IC.grid}</span>`:lgLogo(l,34)}<span class="ln">${l.id==='all'?'Todas':esc(l.short||l.name)}</span>${n?`<span class="n">${n}</span>`:''}${S.favLg.includes(l.id)?'<span class="pin"></span>':''}</button>`}).join('');
   const ids=lg==='all'?ordered.map(l=>l.id):[lg];let body='',loading=false,any=false;
   const favG=[];ids.forEach(id=>{const d=S.day[id+'|'+date];if(d&&d.list)d.list.forEach(g0=>{const g=S.ev[g0.key]?.g||g0;if(isFav(g.lg,g.away.id)||isFav(g.lg,g.home.id))favG.push(g)})});
