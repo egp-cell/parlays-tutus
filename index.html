@@ -1883,7 +1883,7 @@ const flagEmoji=cc=>cc?String.fromCodePoint(...cc.toUpperCase().split('').map(c=
 function inTxt(iso){const d=new Date(iso)-Date.now();if(d<=0)return 'ahora';const m=Math.round(d/6e4);if(m<60)return `en ${m} min`;const h=Math.floor(m/60);if(h<24)return `en ${h} h${m%60?' '+(m%60)+' min':''}`;const dd=Math.floor(h/24);return `en ${dd} d${h%24?' '+(h%24)+' h':''}`}
 const dshort=iso=>new Date(iso).toLocaleDateString('es-MX',{weekday:'short'}).replace('.','');
 const dmon=iso=>new Date(iso).toLocaleDateString('es-MX',{day:'numeric',month:'short'}).replace('.','');
-function fmtRange(a,b){const A=new Date(a),B=new Date(b||a);const m=d=>d.toLocaleDateString('es-MX',{month:'short'}).replace('.','');return A.getMonth()===B.getMonth()?`${A.getDate()}–${B.getDate()} ${m(B)}`:`${A.getDate()} ${m(A)} – ${B.getDate()} ${m(B)}`}
+function fmtRange(a,b){const A=new Date(a),B=new Date(b||a);const m=d=>d.toLocaleDateString('es-MX',{month:'short',timeZone:'UTC'}).replace('.','');return A.getUTCMonth()===B.getUTCMonth()?`${A.getUTCDate()}–${B.getUTCDate()} ${m(B)}`:`${A.getUTCDate()} ${m(A)} – ${B.getUTCDate()} ${m(B)}`}
 const stPill=(state,txt)=>state==='in'?`<span class="epill lv"><i></i>${esc(txt||'En vivo')}</span>`:state==='post'?`<span class="epill">${esc(txt||'Final')}</span>`:`<span class="epill pre">${esc(txt||'')}</span>`;
 const favBtn=k=>{const on=isFavG(k);return `<button class="efol ${on?'on':''}" data-a="favGame" data-k="${k}">${STAR}${on?'Siguiendo':'Seguir'}</button>`};
 
