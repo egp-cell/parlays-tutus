@@ -637,7 +637,7 @@ function sheetBuild(s){
   if(s.view==='game')return buildGame(s);
   if(s.view==='player')return buildPlayer(s);
   const days=[0,1,2,3,4,-1].map(o=>`<button class="chip" data-a="boff" data-v="${o}" aria-pressed="${o===s.off}">${dayLabel(o)}</button>`).join('');
-  return {title:'Agregar parlay'+`<div class="sh-sub">Sube tu boleto o busca cada selección</div>`,html:`<button class="upl" data-a="pickShot"><span class="ico">${IC.cam}</span><span><b>Subir captura del boleto</b><span>Leo las selecciones, el monto y el momio</span></span></button><input type="file" id="shotIn" accept="image/*" hidden><div class="search">${IC.search}<input id="bq" type="search" placeholder="LeBron, Mahomes, América…" value="${esc(s.q)}" data-in="bq" autocomplete="off" enterkeyhint="search" aria-label="Buscar jugador o equipo"></div><div class="chips">${days}</div><div id="bres">${resultsHtml(s)}</div>`,foot:trayFoot(),focus:'#bq'}}
+  return {title:'Agregar parlay'+`<div class="sh-sub">Sube tu boleto o busca cada selección</div>`,html:`<button class="upl" data-a="pickShot"><span class="ico">${IC.cam}</span><span><b>Subir captura del boleto</b><span>Puedes subir varias si tu parlay es largo</span></span></button><input type="file" id="shotIn" accept="image/*" multiple hidden><div class="search">${IC.search}<input id="bq" type="search" placeholder="LeBron, Mahomes, América…" value="${esc(s.q)}" data-in="bq" autocomplete="off" enterkeyhint="search" aria-label="Buscar jugador o equipo"></div><div class="chips">${days}</div><div id="bres">${resultsHtml(s)}</div>`,foot:trayFoot(),focus:'#bq'}}
 function renderResults(){const s=S.sheet;const el=$('#bres');if(el&&s)el.innerHTML=resultsHtml(s)}
 function gsub(g){return g.state==='pre'?hhmm(g.date):g.state==='in'?`${g.away.abbr} ${g.away.score}–${g.home.score} ${g.home.abbr} · ${g.detail}`:'Final'}
 function resultsHtml(s){
@@ -726,7 +726,7 @@ function buildReview(s){
 /* ---------- Subir captura: Claude lee la imagen si está disponible; si no, OCR gratis en el navegador ---------- */
 const MK_WORDS=[['pra',/(pts\s*\+\s*reb\s*\+\s*ast|puntos\s*\+\s*rebotes\s*\+\s*asist|points\s*\+\s*rebounds\s*\+\s*assists|\bpra\b)/],['pr',/(puntos\s*\+\s*rebotes|points\s*\+\s*rebounds|pts\s*\+\s*reb)/],['pa',/(puntos\s*\+\s*asist|points\s*\+\s*assists|pts\s*\+\s*ast)/],['ra',/(rebotes\s*\+\s*asist|rebounds\s*\+\s*assists|reb\s*\+\s*ast)/],
   ['3pm',/(triples|3-?pointers|threes|3pt|tiros de 3)/],['reb',/(rebotes|rebounds|\breb\b)/],['ast',/(asistencias|assists|\bast\b)/],['stl',/(robos|steals)/],['blk',/(tapones|bloqueos|blocks)/],['pts',/(puntos|points|\bpts\b)/],
-  ['pyds',/(yardas? (por |de )?pase|passing yards|pass yds)/],['ptd',/(td (por |de )?pase|passing td|pass td)/],['int',/(intercep)/],['rryds',/(rush(ing)?\s*\+\s*rec|carrera\s*\+\s*rec|tierra\s*\+\s*rec)/],['ryds',/(yardas? (por |de )?(tierra|carrera)|rushing yards|rush yds)/],['recyds',/(yardas? (por |de )?recep|receiving yards|rec yds)/],['rec',/(recepciones|receptions)/],['td',/(anota(dor)? (un )?td|touchdown|anytime td)/],
+  ['pyds',/(yardas? (por |de )?pase|passing yards|pass yds)/],['ptd',/(td (por |de )?pase|passing td|pass td)/],['int',/(intercep)/],['rryds',/(rush(ing)?\s*\+\s*rec|carrera\s*\+\s*rec|tierra\s*\+\s*rec)/],['ryds',/(yardas? (por |de )?(tierra|carrera)|rushing yards|rush yds)/],['recyds',/(yardas? (por |de )?recep|receiving yards|rec yds)/],['rec',/(recepciones|receptions)/],['td',/(anota\w* (de )?(un )?td|touchdown|anytime td|td en cualquier)/],
   ['k',/(ponches|strikeouts)/],['hr',/(jonr|home run)/],['hrr',/(hits\s*\+\s*runs\s*\+\s*rbi|h\s*\+\s*c\s*\+\s*ci)/],['rbi',/(impulsadas|\brbi)/],['h',/(\bhits?\b)/],
   ['sot',/(tiros a (puerta|gol)|shots on target)/],['sog',/(shots on goal|tiros a gol)/],['sh',/(tiros|shots)/],['g',/(anota|goleador|\bgol\b|goal)/],['a',/(asistencia)/],['sv',/(atajadas|saves)/],['p',/(\bpuntos\b|\bpoints\b)/]];
 function marketFrom(kind,txt){for(const[k,re] of MK_WORDS){if(propDef(kind,k)&&re.test(txt))return k}return null}
@@ -755,11 +755,11 @@ function legFromCand(c){
   if(c.kind==='spread')return {...legBase(g),type:'spread',...T,line:c.line};
   return {...legBase(g),type:'total',line:c.line,ou:c.ou}}
 function moneyNum(x){if(x==null)return null;const n=Number(String(x).replace(/[^\d.]/g,''));return n>0?n:null}
-async function readWithClaude(file,ix){
-  const sample=await claude?.use?.('sample');if(!sample)return null;const lim=await sample.limits().catch(()=>null);if(!lim?.images)return null;
+async function readWithClaude(files,ix){
+  const sample=await claude?.use?.('sample');if(!sample)return null;const lim=await sample.limits().catch(()=>null);if(!lim?.images)return null;const imgs=files.slice(0,lim.images.maxCount||files.length);
   const games=ix.games.map(g=>`${LG[g.lg].name}: ${g.away.name} (${g.away.abbr}) @ ${g.home.name} (${g.home.abbr})`).join('\n');
   const mk=Object.entries(PROPS).map(([k,v])=>`${k}: ${v.map(x=>x[0]+'='+x[1]).join(', ')}`).join('\n');
-  const prompt=`La imagen es la captura de un boleto de apuesta (parlay) de un casino en línea. Extrae cada selección.
+  const prompt=`Las imágenes son capturas de un mismo boleto de apuesta (parlay) de un casino en línea, en orden; puede venir partido en varias capturas. Extrae cada selección sin repetir.
 Responde SOLO con JSON con esta forma:
 {"stake":número o null,"odds":"momio total del boleto tal cual aparece (americano como +550 o decimal como 6.50)" o null,"payout":número o null,
  "legs":[{"kind":"prop|ml|spread|total","player":"nombre completo del jugador o null","team":"equipo de esa selección o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate}]}
@@ -769,29 +769,42 @@ Claves de mercado por deporte:
 ${mk}
 Partidos disponibles (usa estos nombres de equipo cuando apliquen):
 ${games}`;
-  try{const data=await sample.json(prompt,{images:[file],modelTier:'default'});return data}catch(e){if(e&&['not_granted','images_unavailable','unavailable'].includes(e.code))return null;throw e}}
+  try{const data=await sample.json(prompt,{images:imgs,modelTier:'default'});return data}catch(e){if(e&&['not_granted','images_unavailable','unavailable'].includes(e.code))return null;throw e}}
 function loadScript(src){return new Promise((res,rej)=>{if(window.Tesseract)return res();const sc=document.createElement('script');sc.src=src;sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)})}
-async function readWithOcr(file,ix,onProg){
+async function prepImage(file){
+  try{const bmp=await createImageBitmap(file);const k=Math.min(2.5,Math.max(1,2000/bmp.width));const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+    const x=c.getContext('2d');x.drawImage(bmp,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height),a=d.data;let sum=0;
+    for(let i=0;i<a.length;i+=4){const g=.299*a[i]+.587*a[i+1]+.114*a[i+2];a[i]=a[i+1]=a[i+2]=g;sum+=g}
+    const dark=sum/(a.length/4)<128;
+    for(let i=0;i<a.length;i+=4){let g=a[i];if(dark)g=255-g;g=g<150?Math.max(0,(g-40)*1.6):255;a[i]=a[i+1]=a[i+2]=g}
+    x.putImageData(d,0,0);return await new Promise(r=>c.toBlob(b=>r(b||file),'image/png'))}catch(e){return file}}
+async function readWithOcr(files,ix,onProg){
   await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
-  const {data}=await Tesseract.recognize(file,'spa+eng',{logger:m=>{if(m.status==='recognizing text')onProg(m.progress)}});
-  return parseOcr(data.text||'',ix)}
+  let cur=0;const w=await Tesseract.createWorker('spa+eng',1,{logger:m=>{if(m.status==='recognizing text')onProg(cur,m.progress)}});
+  let text='';try{for(cur=0;cur<files.length;cur++){const img=await prepImage(files[cur]);const {data}=await w.recognize(img);text+='\n'+(data.text||'')}}finally{w.terminate()}
+  const res=parseOcr(text,ix);res.raw=text;return res}
 function parseOcr(text,ix){
-  const raw=text.split(/\n+/).map(l=>l.trim()).filter(Boolean);const L=raw.map(l=>norm(l));const legs=[];const seen=new Set();const used=new Set();let ctx=null;
-  const numAfter=w=>{const m=w.match(/\b(?:over|under|mas de|menos de|mas|menos|alta|baja|o|u)\s*(\d+(?:[.,]\d)?)/);return m?Number(m[1].replace(',','.')):null};
-  const ouOf=w=>/\b(under|menos|baja|u)\b/.test(w)?'under':/\b(over|mas|alta|o)\b/.test(w)?'over':null;
-  const playerIn=l=>ix.players.find(p=>p.last.length>=4&&l.includes(p.last)&&(l.includes(p.first)||l.includes(p.first[0]+'. '+p.last)||l.includes(p.first[0]+' '+p.last)||ix.lastCount[p.last]===1));
+  const raw=text.split(/\n+/).map(l=>l.trim()).filter(l=>l.length>1);const L=raw.map(l=>norm(l).replace(/[|_—–]/g,' ').replace(/\s+/g,' '));const legs=[];const seen=new Set();const used=new Set();let ctx=null;
+  const lineNum=w=>{let m=w.match(/(?:^|[^\d])(\d{1,3}[.,]5)(?!\d)/);if(m)return Number(m[1].replace(',','.'));m=w.match(/\b(?:over|under|mas de|menos de|mas|menos|alta|baja|o|u)\s*(\d+(?:[.,]\d)?)/);return m?Number(m[1].replace(',','.')):null};
+  const ouOf=w=>/\b(under|menos|baja|bajas)\b|\bu\s*\d/.test(w)?'under':/\b(over|mas|alta|altas)\b|\bo\s*\d|\d[.,]5\s*\+/.test(w)?'over':null;
+  const playerIn=l=>ix.players.find(p=>p.last.length>=4&&new RegExp('\\b'+p.last+'\\b').test(l)&&(l.includes(p.first)||new RegExp('\\b'+p.first[0]+'[. ]+'+p.last).test(l)||ix.lastCount[p.last]===1));
   const teamsIn=l=>{const r=[];ix.teams.forEach(x=>{const nm=norm(x.t.name);if(nm.length>=4&&l.includes(nm)&&!r.some(y=>y.g.key===x.g.key&&y.side===x.side))r.push(x)});return r};
+  const pl=L.map(playerIn);
   for(let i=0;i<L.length;i++){
-    if(used.has(i))continue;const l=L[i];
-    const pl=playerIn(l);
-    if(pl){const kind=LG[pl.g.lg].kind;let w=l,market=marketFrom(kind,w),line=numAfter(w),ou=ouOf(w.replace(norm(pl.name),''));
-      if((!market||line==null)&&i+1<L.length&&!playerIn(L[i+1])){w=l+' '+L[i+1];market=market||marketFrom(kind,w);line=line??numAfter(w);ou=ou||ouOf(L[i+1]);used.add(i+1)}
-      if(market&&line==null&&YESNO.has(market)){line=0.5;ou='over'}
-      ctx=pl;if(!market||line==null||!ou)continue;const k='p'+pl.id+market;if(seen.has(k))continue;seen.add(k);legs.push({kind:'prop',p:pl,market,line,ou});continue}
+    const l=L[i];
+    if(used.has(i)&&!pl[i])continue;
+    if(pl[i]){const p=pl[i];const kind=LG[p.g.lg].kind;
+      const near=[i];for(const j of [i+1,i-1,i+2,i-2])if(j>=0&&j<L.length&&!pl[j]&&!used.has(j)&&teamsIn(L[j]).length===0)near.push(j);
+      const txt=j=>L[j].replace(norm(p.name),' ').replace(p.last,' ');
+      let market=null,line=null,ou=null;const take=[];
+      for(const j of near){const t=txt(j);const m=marketFrom(kind,t),n=lineNum(t),o=ouOf(t);if(m||n!=null||o){take.push(j);market=market||m;if(line==null)line=n;ou=ou||o}if(market&&line!=null&&ou)break}
+      ou=ou||'over';if(market&&YESNO.has(market)&&(line==null||line>3)){line=0.5;ou='over'}
+      take.forEach(j=>used.add(j));
+      ctx={g:p.g,side:p.side,t:p.t};if(!market||line==null)continue;const k='p'+p.id+market;if(seen.has(k))continue;seen.add(k);legs.push({kind:'prop',p,market,line,ou});continue}
     const tms=teamsIn(l);
     if(tms.length>=2){ctx=tms[0];continue}
     const isTotal=/\b(total|altas|bajas)\b/.test(l)||(!tms.length&&/\b(over|under|mas de|menos de)\s*\d/.test(l));
-    if(isTotal){const tm=tms[0]||ctx;const line=numAfter(l),ou=ouOf(l);if(tm&&line!=null&&ou){const k='t'+tm.g.key;if(!seen.has(k)){seen.add(k);legs.push({kind:'total',tm,line,ou})}}continue}
+    if(isTotal){const tm=tms[0]||ctx;const line=lineNum(l)??lineNum(L[i+1]||''),ou=ouOf(l)||ouOf(L[i+1]||'');if(tm&&line!=null&&ou){const k='t'+tm.g.key;if(!seen.has(k)){seen.add(k);legs.push({kind:'total',tm,line,ou})}}continue}
     if(tms.length!==1)continue;const tm=tms[0];ctx=tm;
     const sp=l.match(/(?:^|\s)([+-]\d{1,2}(?:[.,]5)?)(?!\d)/);
     if(sp){const k='s'+tm.g.key+tm.side;if(!seen.has(k)){seen.add(k);legs.push({kind:'spread',tm,line:Number(sp[1].replace(',','.'))})}}
@@ -816,23 +829,25 @@ function resolveClaude(data,ix){
       else unknown.push(desc)}});
   return {legsResolved:out,stake:moneyNum(data.stake),odds:data.odds?String(data.odds).trim():null,payout:moneyNum(data.payout),unknown}}
 function buildScan(s){
-  return {title:'Leyendo tu boleto',html:`<div class="scan"><div class="shot">${s.shotUrl?`<img src="${s.shotUrl}" alt="Tu captura">`:''}</div><h3>${esc(s.scanMsg||'Leyendo selecciones…')}</h3><p>Empato cada selección con los partidos y jugadores de ESPN. Al terminar la revisas antes de guardar.</p></div>`,back:'bback'}}
-async function runScan(file){
-  const s=S.sheet;if(!s)return;s.shotUrl&&URL.revokeObjectURL(s.shotUrl);s.shotUrl=URL.createObjectURL(file);s.rfrom='home';s.view='scan';s.scanMsg='Cargando partidos del día…';renderSheet();
+  return {title:'Leyendo tu boleto',html:`<div class="scan"><div class="shot">${s.shotUrls&&s.shotUrls[0]?`<img src="${s.shotUrls[0]}" alt="Tu captura">`:''}</div>${s.shotUrls&&s.shotUrls.length>1?`<p><b>${s.shotUrls.length} capturas</b></p>`:''}<h3>${esc(s.scanMsg||'Leyendo selecciones…')}</h3><p>Empato cada selección con los partidos y jugadores de ESPN. Al terminar la revisas antes de guardar.</p></div>`,back:'bback'}}
+async function runScan(files){
+  const s=S.sheet;if(!s||!files.length)return;(s.shotUrls||[]).forEach(u=>URL.revokeObjectURL(u));s.shotUrls=files.map(f=>URL.createObjectURL(f));s.rfrom='home';s.view='scan';s.scanMsg='Cargando partidos del día…';renderSheet();
   const set=m=>{if(S.sheet===s&&s.view==='scan'){s.scanMsg=m;const h=$('.scan h3');if(h)h.textContent=m}};
+  const n=files.length;
   try{
     const ix=await scanIndex();
-    set('Leyendo selecciones…');
-    let res=null;const viaClaude=await readWithClaude(file,ix).catch(()=>null);
+    set(n>1?`Leyendo ${n} capturas…`:'Leyendo selecciones…');
+    let res=null;const viaClaude=await readWithClaude(files,ix).catch(()=>null);
     if(viaClaude)res=resolveClaude(viaClaude,ix);
-    else res=await readWithOcr(file,ix,p=>set(`Leyendo selecciones… ${Math.round(p*100)}%`));
+    else res=await readWithOcr(files,ix,(i,p)=>set(n>1?`Leyendo captura ${i+1} de ${n}… ${Math.round(p*100)}%`:`Leyendo selecciones… ${Math.round(p*100)}%`));
     if(S.sheet!==s)return;
     let added=0;res.legsResolved.forEach(c=>{const q=legFromCand(c);if(!inDraft(q)){S.draft.legs.push({...q,id:uid()});added++}});
     if(res.stake&&!S.draft.stake)S.draft.stake=String(res.stake);
     if(res.odds&&dec(res.odds))S.draft.odds=res.odds;else if(res.payout&&res.stake)S.draft.odds=(res.payout/res.stake).toFixed(2);
     save();
-    s.found=added?`<div class="found"><b>Encontré ${added} ${added===1?'selección':'selecciones'}</b>${res.stake?` · apuesta ${money(res.stake)}`:''}${S.draft.odds?` · momio ${esc(S.draft.odds)}`:''}. Revisa que estén bien.${res.unknown.length?`<br>No pude identificar:<ul>${res.unknown.map(u=>`<li>${esc(u)}</li>`).join('')}</ul>Agrégalas con el buscador.`:''}</div>`
-      :`<div class="found"><b>No pude leer selecciones en esta captura.</b> Agrégalas con el buscador; si la captura es de un partido de otro día, cambia el día arriba.</div>`;
+    const rawBox=res.raw?`<details style="margin-top:8px"><summary>Ver lo que leí de la captura</summary><pre style="white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto;margin:8px 0 0">${esc(res.raw.trim())}</pre></details>`:'';
+    s.found=added?`<div class="found"><b>Encontré ${added} ${added===1?'selección':'selecciones'}</b>${res.stake?` · apuesta ${money(res.stake)}`:''}${S.draft.odds?` · momio ${esc(S.draft.odds)}`:''}. Revisa que estén bien.${res.unknown.length?`<br>No pude identificar:<ul>${res.unknown.map(u=>`<li>${esc(u)}</li>`).join('')}</ul>Agrégalas con el buscador.`:''}${rawBox}</div>`
+      :`<div class="found"><b>No pude identificar las selecciones.</b> Agrégalas con el buscador. Solo reconozco partidos de ayer, hoy y mañana.${rawBox}</div>`;
     s.view='review';renderSheet();renderMain();
   }catch(e){if(S.sheet!==s)return;s.found=`<div class="found"><b>No pude leer la captura.</b> Intenta con otra imagen o agrega las selecciones con el buscador.</div>`;s.view='review';renderSheet()}
 }
@@ -906,7 +921,7 @@ document.addEventListener('input',e=>{const t=e.target,k=t.dataset.in;if(!k)retu
   else if(k==='dstake'){S.draft.stake=t.value;save();updPay()}
   else if(k==='dodds'){S.draft.odds=t.value;save();updPay()}
   else if(k==='dname'){S.draft.name=t.value;save()}});
-document.addEventListener('change',e=>{if(e.target.id==='shotIn'&&e.target.files&&e.target.files[0]){runScan(e.target.files[0]);return}if(e.target.dataset.in==='line')renderSheet(true)});
+document.addEventListener('change',e=>{if(e.target.id==='shotIn'&&e.target.files&&e.target.files.length){runScan([...e.target.files]);e.target.value='';return}if(e.target.dataset.in==='line')renderSheet(true)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.sheet)closeSheet()});
 function updPay(){const D=dec(S.draft.odds),st=Number(String(S.draft.stake).replace(/[$,]/g,''))||0;const el=$('#dpay');if(el)el.textContent=D&&st?money(st*D):'—'}
 let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2600)}
