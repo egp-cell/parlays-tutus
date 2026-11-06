@@ -149,7 +149,10 @@ main::-webkit-scrollbar{display:none}
 .chip{flex:none;display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:13.5px;font-weight:600;color:var(--muted);white-space:nowrap;transition:background .15s,color .15s}
 .chip[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--line-accent)}
 .chip.livec i{width:7px;height:7px;border-radius:50%;background:var(--loss);animation:blink 1.4s infinite} .chip.livec b{font-size:11px;background:var(--loss);color:#fff;border-radius:999px;padding:1px 6px;margin-left:2px} .chip.livec[aria-pressed="true"]{background:rgba(240,68,56,.15);color:#FF6B5E;border-color:rgba(240,68,56,.4)}
-.drow{display:flex;align-items:center;gap:8px;min-width:0} .drow>.livec{flex:none} .drow>.chips{flex:1;min-width:0}
+.drow{display:flex;align-items:center;gap:0;min-width:0;padding:2px 0 12px}
+.drow>.livec{flex:none;padding:8px 12px;gap:6px;position:relative;z-index:1}
+.drow>.livec+.chips{position:relative}
+.stick .drow>.chips{flex:1;min-width:0;margin:0 -16px 0 10px;padding:0 16px 0 10px;border-left:1px solid var(--line);-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 22px);mask-image:linear-gradient(90deg,transparent 0,#000 22px)}
 #ptr{position:fixed;left:50%;top:0;z-index:30;transform:translate(-50%,-60px);display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--muted);box-shadow:0 8px 24px rgba(0,0,0,.5);pointer-events:none;opacity:0;transition:opacity .15s}
 #ptr.on{opacity:1} #ptr i{width:16px;height:16px;border-radius:50%;border:2px solid var(--surface-3);border-top-color:var(--accent);transition:transform .1s} #ptr.rdy{color:var(--fg)} #ptr.spin i{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
