@@ -1,5 +1,5 @@
 // Service worker de Quinielas Tutus: deja la app instalable, abre sin conexión y muestra los avisos.
-const CACHE = 'tutus-v28';
+const CACHE = 'tutus-v29';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon.png'];
 
 self.addEventListener('install', e => {
@@ -19,8 +19,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  // Siempre pregunta al servidor si hay versión nueva (sin usar la copia vieja del navegador)
+  const fresh = e.request.mode === 'navigate' || /\/(index\.html)?$|\.(js|json|webmanifest)$/.test(url.pathname);
   e.respondWith(
-    fetch(e.request)
+    fetch(fresh ? new Request(e.request, { cache: 'no-cache' }) : e.request)
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));

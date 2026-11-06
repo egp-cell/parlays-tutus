@@ -2589,7 +2589,8 @@ const MOCK=(()=>{
   load();renderMain();await sync();startLoop();maybeAskNt();ntSync();
   try{const gk=new URLSearchParams(location.search).get('g');if(gk&&S.ev[gk])openGameDetail(gk)}catch(e){}
   if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{const k=e.data&&e.data.open;if(k){if(S.ev[k])openGameDetail(k);else{const lg=k.split(':')[0];loadDay(0,[lg]).then(()=>{if(S.ev[k])openGameDetail(k)})}}});
-  if('serviceWorker' in navigator&&location.protocol==='https:'&&window.top===window){try{navigator.serviceWorker.register('sw.js')}catch(e){}}
+  if('serviceWorker' in navigator&&location.protocol==='https:'&&window.top===window){try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
+    const had=!!navigator.serviceWorker.controller;let rl=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl&&!S.sheet){rl=true;location.reload()}})}catch(e){}}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync()});
 })();
 </script>
