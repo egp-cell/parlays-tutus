@@ -180,7 +180,9 @@ export default async () => {
           const needTxt = L => L.ou === 'over' ? 'necesita ' + (Math.floor(L.line) + 1) : 'máximo ' + (Math.ceil(L.line) - 1);
           // Una línea por selección con círculo de color: 🟢 va bien · 🟡 abajo del ritmo · ✅ ya cobró · ⚪ no ha empezado
           const dot = x => ['won', 'push'].includes(x.r.st) ? '✅' : x.r.st === 'ok' ? '🟢' : x.r.st === 'bad' ? '🟡' : x.r.st === 'live' ? '🟢' : '⚪';
-          const lines = rs.map(x => dot(x) + ' ' + sh(x) + (x.r.st === 'bad' && x.r.proj != null ? ' · va para ' + pj(x) + ', ' + needTxt(x.L) : ''));
+          // "Wembanyama 20/28.5 pts": lo que lleva / la línea
+          const shv = x => typeof x.r.v === 'number' && x.L.line != null ? sh(x).replace(/[+-](\d+(?:\.\d+)?)/, fmt(x.r.v) + '/$1') + (x.L.ou === 'under' ? ' (menos)' : '') : sh(x);
+          const lines = rs.map(x => dot(x) + ' ' + shv(x) + (x.r.st === 'bad' && x.r.proj != null ? ' · va para ' + pj(x) : ''));
           const body = lines.slice(0, 4).join('\n') + (lines.length > 4 ? '\n+' + (lines.length - 4) + ' más' : '');
           await send(s, '📊 ' + nm + ': ' + ok + ' de ' + rs.length + (ok === 1 ? ' va bien' : ' van bien'), body, P.id + ':sum', '');
           st.sumAt = now; st.sumSig = sig;
