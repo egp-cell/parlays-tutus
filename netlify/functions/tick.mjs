@@ -13,10 +13,14 @@ const tr = s => ES[s] || String(s || '').replace(/(\d)(st|nd|rd|th) Quarter/, '$
 
 /* ---------- partidos ---------- */
 function team(x) { const t = x.team || {}; const sc = typeof x.score === 'object' ? Number(x.score?.value ?? x.score?.displayValue) : Number(x.score); return { id: String(t.id || ''), abbr: t.abbreviation || '', name: t.shortDisplayName || t.displayName || '', score: isFinite(sc) ? sc : 0, ls: (x.linescores || []).map(l => Number(l.value ?? l.displayValue) || 0), win: !!x.winner }; }
+function cornersByHalf(j){const c=j&&j.header&&j.header.competitions&&j.header.competitions[0];const com=j&&j.commentary;if(!c||!Array.isArray(com))return null;const nm={};(c.competitors||[]).forEach(t=>{const tt=t.team||{};[tt.displayName,tt.shortDisplayName,tt.name,tt.abbreviation].filter(Boolean).forEach(n=>nm[String(n).toLowerCase()]=t.homeAway)});
+  const o={h1:{home:0,away:0},h2:{home:0,away:0}};let any=false;com.forEach(x=>{const t=String(x.text||'');const m=t.match(/^Corner,\s*([^.]+)\./);if(!m)return;any=true;const side=nm[m[1].trim().toLowerCase()];if(!side)return;const d=String((x.time&&x.time.displayValue)||'');const mn=parseInt(d)||0;const h=(mn<=45||/^45'\+/.test(d))?'h1':'h2';o[h][side]++});return any||com.length?o:null}
 function xCore(L,g,kind,fin){const hs=g.home.score,as=g.away.score,tot=hs+as,sc=as+'-'+hs;const W=(ok,dead)=>fin?(ok?'won':'lost'):dead?'lost':(ok?'winning':'losing');
   const hl=g.home.ls||[],al=g.away.ls||[];const sum=(x,a,b)=>x.slice(a,b).reduce((p,c)=>p+(Number(c)||0),0);
   const resOk=s=>s==='h'?hs>as:s==='a'?as>hs:hs===as;
   switch(L.m){
+    case 'c1':{if(!g.cor)return {wait:true};const v=g.cor.h1.home+g.cor.h1.away;const done=fin||g.cor.h2.home+g.cor.h2.away>0||g.period>=2||/half|medio|2nd|2º/i.test(g.detail||g.det||'');return {ou:v,done,unit:'corners'}}
+    case 'tc':{const ts=g.tstats;if(!ts)return {wait:true};return {ou:(ts[L.side]||{}).wonCorners||0,done:fin,unit:'corners'}}
     case 'rt':{const r=resOk(L.sel),t=L.ou==='over'?tot>L.line:tot<L.line;const dead=L.ou==='under'&&tot>L.line;return {st:W(r&&t,dead),msg:`Va ${sc} · ${tot} ${kind==='soccer'?'goles':'en total'}`,v:sc}}
     case 'rb':{const [rs,bt]=String(L.sel).split('|');const r=resOk(rs),b=hs>0&&as>0;const t=bt==='y'?b:!b;const dead=bt==='n'&&b;return {st:W(r&&t,dead),msg:`Va ${sc}`,v:sc}}
     case 'dnb':{const d=L.sel==='h'?hs-as:as-hs;return {st:fin?(d>0?'won':d<0?'lost':'push'):(d>0?'winning':d<0?'losing':'even'),msg:d===0?(fin?'Empate · se anula':'Empatados · se anularía'):`Va ${sc}`,v:sc}}
@@ -127,7 +131,7 @@ function evalLeg(L, g, x) {
     if (L.m === 'btts') { const both = hs > 0 && as > 0; if (L.sel === 'y') return { st: both ? 'won' : fin ? 'lost' : 'live', msg: both ? 'Ya anotaron los dos' : 'Falta que anoten' }; return { st: both ? 'lost' : fin ? 'won' : 'ok', msg: both ? 'Anotaron los dos' : 'Aguanta' }; }
     if (L.m === 'tt') v = L.side === 'home' ? hs : as;
     else if (L.m === 'corn' || L.m === 'card') { if (!x.ts) return { st: 'live', msg: 'Esperando estadísticas' }; const f = L.m === 'corn' ? t => t.wonCorners || 0 : t => (t.yellowCards || 0) + (t.redCards || 0); v = f(x.ts.home || {}) + f(x.ts.away || {}); unit = L.m === 'corn' ? 'corners' : 'tarjetas'; }
-    else { const xc = xCore(L, { ...g, period: g.per, detail: g.det }, g.kind, fin); if (!xc) return { st: fin ? 'unknown' : 'live', msg: '' };
+    else { const xc = xCore(L, { ...g, period: g.per, detail: g.det, cor: x.c, tstats: x.ts }, g.kind, fin); if (!xc) return { st: fin ? 'unknown' : 'live', msg: '' }; if (xc.wait) return { st: 'live', msg: 'Esperando estadísticas' };
       if (xc.ou != null) { if (xc.pre) return { st: 'pending', msg: '' }; v = xc.ou; }
       else return { st: { winning: 'ok', losing: 'bad', even: 'live' }[xc.st] || xc.st, msg: fin ? xc.msg.replace(/^Va /, 'Quedó ') : xc.msg }; }
   } else return { st: 'live', msg: '' };
@@ -172,7 +176,7 @@ export default async () => {
     const tennisLgs = [...new Set([...pk].map(k => k.split(':')[0]).filter(l => LG[l][2] === 'tennis'))];
     await Promise.all(tennisLgs.map(async lg => { const j = await get(B + 'tennis/' + lg + '/scoreboard'); if (j) games(lg, j).forEach(g => { G[g.key] = g; X[g.key] = {}; }); }));
     await Promise.all([...pk].filter(k => LG[k.split(':')[0]][2] !== 'tennis').map(async k => { const [lg, id] = k.split(':'); const [sp, lgp] = LG[lg]; const j = await get(B + sp + '/' + lgp + '/summary?event=' + id);
-      const c = j?.header?.competitions?.[0]; if (!c) return; const g = fromComp(lg, id, c); G[k] = g; X[k] = { stats: playerStats(j), ts: teamStats(j, g) }; }));
+      const c = j?.header?.competitions?.[0]; if (!c) return; const g = fromComp(lg, id, c); G[k] = g; X[k] = { stats: playerStats(j), ts: teamStats(j, g), c: g.kind === 'soccer' ? cornersByHalf(j) : null }; }));
     const pst = (await stateStore.get('parlays', { type: 'json' })) || {}; const pnext = {}; const now = Date.now();
     for (const s of subs) for (const P of (s.v.parlays || [])) {
       const id = s.key + '|' + P.id; const old = pst[id] || { legs: {}, sumAt: 0 }; const st = { legs: {}, sumAt: old.sumAt, done: old.done, sumSig: old.sumSig, liveAt: old.liveAt };
