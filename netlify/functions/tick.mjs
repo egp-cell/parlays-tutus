@@ -13,6 +13,25 @@ const tr = s => ES[s] || String(s || '').replace(/(\d)(st|nd|rd|th) Quarter/, '$
 
 /* ---------- partidos ---------- */
 function team(x) { const t = x.team || {}; const sc = typeof x.score === 'object' ? Number(x.score?.value ?? x.score?.displayValue) : Number(x.score); return { id: String(t.id || ''), abbr: t.abbreviation || '', name: t.shortDisplayName || t.displayName || '', score: isFinite(sc) ? sc : 0, ls: (x.linescores || []).map(l => Number(l.value ?? l.displayValue) || 0), win: !!x.winner }; }
+function xCore(L,g,kind,fin){const hs=g.home.score,as=g.away.score,tot=hs+as,sc=as+'-'+hs;const W=(ok,dead)=>fin?(ok?'won':'lost'):dead?'lost':(ok?'winning':'losing');
+  const hl=g.home.ls||[],al=g.away.ls||[];const sum=(x,a,b)=>x.slice(a,b).reduce((p,c)=>p+(Number(c)||0),0);
+  const resOk=s=>s==='h'?hs>as:s==='a'?as>hs:hs===as;
+  switch(L.m){
+    case 'rt':{const r=resOk(L.sel),t=L.ou==='over'?tot>L.line:tot<L.line;const dead=L.ou==='under'&&tot>L.line;return {st:W(r&&t,dead),msg:`Va ${sc} · ${tot} ${kind==='soccer'?'goles':'en total'}`,v:sc}}
+    case 'rb':{const [rs,bt]=String(L.sel).split('|');const r=resOk(rs),b=hs>0&&as>0;const t=bt==='y'?b:!b;const dead=bt==='n'&&b;return {st:W(r&&t,dead),msg:`Va ${sc}`,v:sc}}
+    case 'dnb':{const d=L.sel==='h'?hs-as:as-hs;return {st:fin?(d>0?'won':d<0?'lost':'push'):(d>0?'winning':d<0?'losing':'even'),msg:d===0?(fin?'Empate · se anula':'Empatados · se anularía'):`Va ${sc}`,v:sc}}
+    case 'wtn':{const me=L.sel==='h'?hs:as,op=L.sel==='h'?as:hs;return {st:W(me>op&&op===0,op>0),msg:op>0?'Ya le anotaron':`Va ${sc}`,v:sc}}
+    case 'cs':{const op=L.sel==='h'?as:hs;return {st:W(op===0,op>0),msg:op>0?'Ya le anotaron':'Portería en cero',v:sc}}
+    case 'exs':{const [h,a]=String(L.sel).split('-').map(Number);const ok=hs===h&&as===a;return {st:W(ok,hs>h||as>a),msg:hs>h||as>a?'Ya no se puede dar':`Va ${sc}`,v:sc}}
+    case 'oe':{const ok=(tot%2===1)===(L.sel==='o');return {st:W(ok,false),msg:`${tot} en total`,v:String(tot)}}
+    case 'nrfi':{const a=al[0],h=hl[0];const r=(Number(a)||0)+(Number(h)||0);const done=fin||hl.length>1||al.length>1||(h!=null&&g.period>1);const ok=L.sel==='y'?r>0:r===0;
+      if(L.sel==='y'&&r>0)return {st:'won',msg:'Hubo carrera en la 1ª',v:String(r)};if(L.sel==='n'&&r>0)return {st:'lost',msg:'Hubo carrera en la 1ª',v:String(r)};
+      return {st:done?(ok?'won':'lost'):(ok?'winning':'losing'),msg:done?'Sin carreras en la 1ª':'1ª entrada en juego',v:String(r)}}
+    case 'reg':{const N=3;const done=fin||hl.length>N||al.length>N;const h=sum(hl,0,N),a=sum(al,0,N);const ok=L.sel==='h'?h>a:L.sel==='a'?a>h:h===a;return {st:done?(ok?'won':'lost'):(ok?'winning':'losing'),msg:`Tiempo regular: ${a}-${h}`,v:`${a}-${h}`}}
+    case 'h2':case 'h2t':{const N=(typeof H1N!=='undefined'?H1N:{soccer:1,basketball:2,football:2,hockey:1,baseball:5})[kind]||1;const started=hl.length>N||al.length>N||(kind==='soccer'&&(g.period>=2||/2nd|second|2º|segundo/i.test(g.detail||g.det||'')));const h=started?sum(hl,N):0,a=started?sum(al,N):0;
+      if(L.m==='h2t')return {ou:h+a,done:fin,pre:!started};const ok=L.sel==='h'?h>a:L.sel==='a'?a>h:h===a;return {st:fin?(ok?'won':'lost'):!started?'pending':(ok?'winning':'losing'),msg:started?`2ª mitad: ${a}-${h}`:'Empieza en la 2ª mitad',v:`${a}-${h}`}}
+    case 'q1':case 'q1t':{const done=fin||hl.length>1||al.length>1;const h=Number(hl[0])||0,a=Number(al[0])||0;if(L.m==='q1t')return {ou:h+a,done};const ok=L.sel==='h'?h>a:L.sel==='a'?a>h:h===a;return {st:done?(ok?'won':'lost'):(ok?'winning':'losing'),msg:`1er ${kind==='hockey'?'periodo':'cuarto'}: ${a}-${h}`,v:`${a}-${h}`}}
+  }return null}
 function fromComp(lg, id, c, e) { const s = c.status || e?.status || {}; const f = h => team((c.competitors || []).find(k => k.homeAway === h) || {});
   return { key: lg + ':' + id, lg, kind: LG[lg][2], state: s.type?.state || 'pre', stn: s.type?.name || '', per: s.period || 0, clk: s.displayClock || '', det: tr(s.type?.shortDetail || ''), home: f('home'), away: f('away'),
     reds: (c.details || []).filter(d => d.redCard).length, goals: (c.details || []).filter(d => d.scoringPlay).map(d => ({ t: String(d.team?.id || ''), who: d.athletesInvolved?.[0]?.displayName || '', clk: d.clock?.displayValue || '' })),
@@ -108,7 +127,9 @@ function evalLeg(L, g, x) {
     if (L.m === 'btts') { const both = hs > 0 && as > 0; if (L.sel === 'y') return { st: both ? 'won' : fin ? 'lost' : 'live', msg: both ? 'Ya anotaron los dos' : 'Falta que anoten' }; return { st: both ? 'lost' : fin ? 'won' : 'ok', msg: both ? 'Anotaron los dos' : 'Aguanta' }; }
     if (L.m === 'tt') v = L.side === 'home' ? hs : as;
     else if (L.m === 'corn' || L.m === 'card') { if (!x.ts) return { st: 'live', msg: 'Esperando estadísticas' }; const f = L.m === 'corn' ? t => t.wonCorners || 0 : t => (t.yellowCards || 0) + (t.redCards || 0); v = f(x.ts.home || {}) + f(x.ts.away || {}); unit = L.m === 'corn' ? 'corners' : 'tarjetas'; }
-    else return { st: fin ? 'unknown' : 'live', msg: '' };
+    else { const xc = xCore(L, { ...g, period: g.per, detail: g.det }, g.kind, fin); if (!xc) return { st: fin ? 'unknown' : 'live', msg: '' };
+      if (xc.ou != null) { if (xc.pre) return { st: 'pending', msg: '' }; v = xc.ou; }
+      else return { st: { winning: 'ok', losing: 'bad', even: 'live' }[xc.st] || xc.st, msg: fin ? xc.msg.replace(/^Va /, 'Quedó ') : xc.msg }; }
   } else return { st: 'live', msg: '' };
   const yn = L.t === 'prop' && L.line === 0.5 && ['td', 'g', 'hr', 'ga', 'yc', 'dbl', 'tpl'].includes(L.mk);
   const r = { v, msg: '' };

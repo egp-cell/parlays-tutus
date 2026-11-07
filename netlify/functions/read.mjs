@@ -1,6 +1,6 @@
 // Lee capturas de boletos con Gemini (Google AI Studio, plan gratis, sin facturación). La llave vive en la variable GEMINI_KEY de Netlify.
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'POST, OPTIONS' };
-const MODELS = ['gemini-3.8-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest'];
+const MODELS = ['gemini-flash-lite-latest', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
 export default async (req) => {
   if (req.method === 'OPTIONS') return new Response('', { headers: CORS });
@@ -19,10 +19,10 @@ export default async (req) => {
   };
   const t0 = Date.now();
   const tries = [];
-  for (const m of MODELS) tries.push([m, { thinkingConfig: { thinkingLevel: 'low' } }], [m, {}]);
+  for (const m of MODELS) tries.push([m, { thinkingConfig: { thinkingLevel: 'minimal' } }], [m, {}]);
   for (const [m, extra] of tries) {
     const left = 27000 - (Date.now() - t0); if (left < 3000) break;
-    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), Math.min(14000, left));
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), Math.min(12000, left));
     try {
       const body2 = { ...payload, generationConfig: { ...payload.generationConfig, ...extra } };
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
@@ -32,9 +32,9 @@ export default async (req) => {
       const j = await r.json();
       const txt = (j.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('').trim();
       const clean = txt.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-      console.log(m, 'ok', Date.now() - t0, 'ms');
+      console.log(m, 'ok', Date.now() - t0, 'ms', clean.slice(0, 900));
       return Response.json({ data: JSON.parse(clean), model: m }, { headers: CORS });
-    } catch (e) { console.log(m, 'err', e.name, e.message, Date.now() - t0); } finally { clearTimeout(to); }
+    } catch (e) { console.log(m, 'err', e.name, e.message, Date.now() - t0); const i = tries.findIndex(t => t[0] === m && !t[1].thinkingConfig); if (extra.thinkingConfig && i >= 0) tries.splice(i, 1); } finally { clearTimeout(to); }
   }
   return Response.json({ error: 'fail' }, { status: 502, headers: CORS });
 };
