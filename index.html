@@ -836,6 +836,8 @@ button.bnr{width:100%;text-align:left}
 .pnext{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:14px}.pnext>div{display:flex;flex-direction:column;gap:2px;min-width:0}.pnext b{font-size:15px;font-weight:800}.pnext span{font-size:12.5px;color:var(--muted);text-transform:capitalize}.pnext small{font-size:11.5px;color:var(--faint)}
 .pgd{color:var(--faint);font-size:11.5px;margin-right:2px}.tbl td small{color:var(--faint);margin-left:5px;font-size:10.5px}
 a.ri.pnew{text-decoration:none;color:inherit;grid-template-columns:minmax(0,1fr) auto}.pnew .n{white-space:normal;line-height:1.3;grid-column:1}.pnew .m{grid-column:1;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.pnew .r{grid-column:2;grid-row:1/3;color:var(--faint)}
+.leg .ft .pace{font-size:12px;font-weight:600;line-height:1.3;white-space:normal} .leg .ft .pace.ok{color:var(--win)} .leg .ft .pace.bad{color:#FFB020}
+.pfc{display:flex;flex-direction:column;gap:2px;margin:8px 14px 2px;padding:9px 12px;border-radius:12px;font-size:12.5px} .pfc b{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase} .pfc.ok{background:rgba(31,191,117,.1);color:var(--win)} .pfc.bad{background:rgba(255,176,32,.1);color:#FFB020} .pfc span{color:var(--fg);font-weight:600}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -1046,7 +1048,7 @@ function rosterList(j){let out=[];(j.athletes||[]).forEach(a=>{if(a.items)out=ou
 /* ================= Estado ================= */
 const S={favGames:(()=>{try{return JSON.parse(localStorage.getItem('pt_favg')||'[]')}catch(e){return []}})(),favLg:[],ftab:'eq',sq:'',stack:[],tidx:null,pres:null,lgLogo:(()=>{try{return JSON.parse(localStorage.getItem('pt_lglogo2')||'{}')}catch(e){return {}}})(),wk:{},stand:{},ptab:'act',det:{},favs:[],sched:{},teamsList:{},mode:'loading',tab:'games',parlays:[],draft:{legs:[],stake:'',odds:'',name:''},ev:{},day:{},rost:{},games:{off:0,lg:'all'},sheet:null,hist:'all',lastSync:null,prev:{},bump:{}};
 const K=()=>'pt2_'+S.mode;
-function save(){store(K()+'_parlays',S.parlays);store(K()+'_draft',S.draft);store(K()+'_favs',S.favs);store(K()+'_favlg',S.favLg)}
+function save(){if(typeof ntSync==='function'&&S.nt&&S.nt.on)ntSync();store(K()+'_parlays',S.parlays);store(K()+'_draft',S.draft);store(K()+'_favs',S.favs);store(K()+'_favlg',S.favLg)}
 function load(){S.parlays=store(K()+'_parlays')||(S.mode==='demo'?MOCK.seedParlays():[]);S.draft=store(K()+'_draft')||{legs:[],stake:'',odds:'',name:''};S.favs=store(K()+'_favs')||[];S.favLg=store(K()+'_favlg')||[]}
 
 /* ================= Evaluación automática de cada pierna ================= */
@@ -1055,6 +1057,17 @@ function legSub(L){const kind=LG[L.lg]?.kind;if(L.type==='x')return xSub(L);if(L
   if(L.type==='prop'){const d=propDef(kind,L.market);const lab=d?d[1]:L.market;if(L.ou==='over'&&L.line===0.5&&YESNO.has(L.market))return `${lab} · ${L.teamAbbr}`;return `${lab} · ${L.ou==='over'?'Más':'Menos'} de ${L.line}`}
   if(L.type==='total')return `Total del partido · ${L.matchup}`;if(L.type==='ml'&&L.early)return `Ganador · pago anticipado +${L.early} · ${L.matchup}`;return `${L.type==='ml'?'Ganador':'Hándicap'} · ${L.matchup}`}
 function gameLine(g){if(g.type==='event'){if(LG[g.lg].kind==='racing'){const fs=f1Session(g);return `${gpInfo(g.name).n}${fs?' · '+sesName(fs.c)+(fs.c.status?.type?.state==='in'?' en vivo':fs.c.status?.type?.state==='post'?' terminada':''):''}`}return `${g.name}${g.state==='in'?' · en juego':g.state==='post'?' · final':''}`}if(LG[g.lg]?.kind==='tennis'){if(g.state==='pre')return `${g.away.abbr} vs ${g.home.abbr} · ${g.detail}`;if(g.state==='post')return `${g.away.abbr} vs ${g.home.abbr} · ${g.detail}`;const i=(g.period||1)-1;const a=g.away.sets[i],b=g.home.sets[i];return `${g.detail}${a&&b?` · ${a.v}–${b.v} en games`:''}`}return g.state==='pre'?`${g.away.abbr} @ ${g.home.abbr} · ${g.detail}`:`${g.away.abbr} ${g.away.score}–${g.home.score} ${g.home.abbr} · ${g.detail}`}
+/* ===== Pronóstico al ritmo actual ===== */
+function gameFrac(g){if(!g)return null;if(g.state==='post')return 1;if(g.state!=='in')return 0;const kind=LG[g.lg]?.kind;const dm=String(g.detail||'').match(/(?:Q|P|T|)(\d)\D{0,6}?(\d+:\d+)/);const per=g.per||(dm?Number(dm[1]):1);
+  const c=String(g.clk||(dm?dm[2]:''));const m=c.match(/(\d+):(\d+)/);const mm=m?Number(m[1])+Number(m[2])/60:/^\d+(\.\d+)?$/.test(c)?Number(c)/60:null;
+  if(kind==='basketball'){const P=g.lg==='wnba'?10:g.lg==='ncaab'?20:12,N=g.lg==='ncaab'?2:4;if(per>N)return 1;return Math.min(1,((per-1)*P+(P-(mm??P)))/(N*P))}
+  if(kind==='football'){if(per>4)return 1;return Math.min(1,((per-1)*15+(15-(mm??15)))/60)}
+  if(kind==='hockey'){if(per>3)return 1;return Math.min(1,((per-1)*20+(20-(mm??20)))/60)}
+  if(kind==='soccer'){const x=String(g.clk||g.detail||'').match(/(\d+)'(?:\s*\+\s*(\d+))?/);const t=x?Number(x[1]):/medio tiempo|half/i.test(g.detail||'')?45:null;return t==null?null:Math.min(1,t/90)}
+  if(kind==='baseball')return Math.min(1,(per-0.5)/9);return null}
+const fmtProj=v=>v<10?String(Math.round(v*10)/10):String(Math.round(v));
+function addPace(r,v,L,fr){if(r.status!=='live'||fr==null||fr<0.1||fr>=0.97||typeof v!=='number')return r;const pj=v/fr;const ok=L.ou==='over'?pj>L.line:pj<L.line;r.proj=pj;r.pace=ok?'ok':'bad';
+  r.pmsg=`Al ritmo actual acaba con ${fmtProj(pj)}${ok?' · en ruta':L.ou==='over'?' · abajo del ritmo':' · se pasaría'}`;return r}
 function evalLeg(L){
   if(L.final)return L.final;
   const ev=S.ev[L.key];const r={status:'pending',v:null,msg:'',game:'',prog:null,mark:null,live:false};
@@ -1081,6 +1094,7 @@ function evalLeg(L){
     r.v=v;const max=Math.max(L.line*1.25,v,1);r.prog=Math.min(1,v/max);r.mark=L.line/max;
     const yn=L.type==='prop'&&L.line===0.5&&YESNO.has(L.market);
     const need=Math.floor(L.line)+1-v,cap=Math.ceil(L.line)-1;
+    const fr0=gameFrac(g);
     if(L.ou==='over'){
       if(v>L.line){r.status='won';r.msg=yn?'¡Ya anotó!':'Ya cobró'}
       else if(fin){r.status=v<L.line?'lost':'push';r.msg=yn?'No anotó':`Se quedó en ${fmtNum(v)}`}
@@ -1090,6 +1104,7 @@ function evalLeg(L){
       else if(fin){r.status=v<L.line?'won':'push';r.msg='Cobró'}
       else{r.status='live';r.msg=`Aguanta hasta ${cap}`}
     }
+    if(!yn)addPace(r,v,L,fr0);
   }
   return r}
 /* ================= Más tipos de apuesta (tipo 'x') ================= */
@@ -1129,8 +1144,8 @@ function evalX(L,r,ev,g,kind,fin){
     case 'dc':{const ok=L.sel==='hX'?hs>=as:L.sel==='aX'?as>=hs:hs!==as;r.v=`${as}-${hs}`;r.status=fin?(ok?'won':'lost'):(ok?'winning':'losing');r.msg=fin?(ok?'Cobró':'No se dio'):(ok?'Va cumpliendo':'Por ahora no');return r}
     case 'btts':{const both=hs>0&&as>0;r.v=`${as}-${hs}`;if(L.sel==='y'){if(both){r.status='won';r.msg='Ya anotaron los dos'}else if(fin){r.status='lost';r.msg='No anotaron los dos'}else{r.status='live';r.msg=hs||as?'Falta que anote el otro':'Faltan goles de los dos'}}
       else{if(both){r.status='lost';r.msg='Ya anotaron los dos'}else if(fin){r.status='won';r.msg='Cobró'}else{r.status='live';r.msg='Aguanta: no han anotado los dos'}}return r}
-    case 'tt':return ouR(r,L.side==='home'?hs:as,L,fin);
-    case 'corn':case 'card':{const ts=ev.tstats;if(!ts){r.status='live';r.msg='Esperando estadísticas';return r}const f=L.m==='corn'?(t=>t.wonCorners||0):(t=>(t.yellowCards||0)+(t.redCards||0));return ouR(r,f(ts.home||{})+f(ts.away||{}),L,fin,L.m==='corn'?'corners':'tarjetas')}
+    case 'tt':return addPace(ouR(r,L.side==='home'?hs:as,L,fin),L.side==='home'?hs:as,L,gameFrac(g));
+    case 'corn':case 'card':{const ts=ev.tstats;if(!ts){r.status='live';r.msg='Esperando estadísticas';return r}const f=L.m==='corn'?(t=>t.wonCorners||0):(t=>(t.yellowCards||0)+(t.redCards||0));const vv=f(ts.home||{})+f(ts.away||{});return addPace(ouR(r,vv,L,fin,L.m==='corn'?'corners':'tarjetas'),vv,L,gameFrac(g))}
     case 'h1':case 'h1t':{const N=H1N[kind]||1;const a=g.away.ls||[],h=g.home.ls||[];const sm=x=>x.slice(0,N).reduce((p,c)=>p+(Number(c)||0),0);const done=fin||a.length>N||h.length>N||(kind==='soccer'&&/medio tiempo|half/i.test(g.detail));const av=sm(a),hv=sm(h);
       if(L.m==='h1t')return ouR(r,av+hv,L,done);
       r.v=`${av}-${hv}`;const ok=L.sel==='h'?hv>av:L.sel==='a'?av>hv:av===hv;r.status=done?(ok?'won':'lost'):(ok?'winning':'losing');r.msg=done?(ok?'Cobró':'No se dio'):`${H1L[kind]}: ${g.away.abbr} ${av}-${hv} ${g.home.abbr}`;return r}}
@@ -1204,7 +1219,7 @@ function trackChanges(first){
   S.parlays.filter(p=>!p.settled).forEach(P=>P.legs.forEach(L=>{const r=evalLeg(L);const pv=S.prev[L.id];
     if(pv&&!first){
       if(typeof r.v==='number'&&typeof pv.v==='number'&&r.v>pv.v)S.bump[L.id]={n:r.v-pv.v,at:Date.now()};
-      if(pv.status!==r.status&&(r.status==='won'||r.status==='lost')){const who=L.type==='prop'?L.athleteName.split(' ').slice(-1)[0]:legTitle(L);toast(`${r.status==='won'?'✓':'✕'} ${who} · ${r.msg}`);if(S.nt.parlay)notify(r.status==='won'?`✓ ${who}: ${r.msg}`:`✕ ${who}: ${r.msg}`,P.name,'leg:'+L.id)}}
+      if(pv.status!==r.status&&(r.status==='won'||r.status==='lost')){const who=L.type==='prop'?L.athleteName.split(' ').slice(-1)[0]:legTitle(L);toast(`${r.status==='won'?'✓':'✕'} ${who} · ${r.msg}`);if(S.nt.parlay)notify(r.status==='won'?`✅ Cobró una de “${P.name}”`:`❌ Se cayó una de “${P.name}”`,`${legTitle(L)}\n${r.msg}`,'leg:'+L.id,L.key)}}
     S.prev[L.id]={v:r.v,status:r.status}}))}
 
 /* ================= Sincronización ================= */
@@ -1302,8 +1317,11 @@ function legView(L,r,pid){
     <span class="ic">${legIcon(L)}${r.status==='won'?'<span class="ck">✓</span>':r.status==='lost'?'<span class="ck">✕</span>':''}</span>
     <div style="min-width:0"><div class="t">${esc(legTitle(L))}</div><div class="s">${esc(legSub(L))}</div></div>
     <div class="val">${fresh?`<span class="bump">+${fmtNum(b.n)}</span>`:''}${val}</div>${trk}
-    <div class="ft"><span class="msg">${esc(r.msg)}</span><span class="gm ${r.live?'lv':''}">${esc(r.status==='pending'?'':r.game)}</span></div>
+    <div class="ft"><span class="msg">${esc(r.msg)}</span>${r.pmsg?`<span class="pace ${r.pace}">${r.pace==='ok'?'📈':'📉'} ${esc(r.pmsg)}</span>`:''}<span class="gm ${r.live?'lv':''}">${esc(r.status==='pending'?'':r.game)}</span></div>
     </button>`}
+function parlayForecast(e){if(e.status!=='live'||e.lost)return '';let ok=0,bad=0,unk=0;e.rs.forEach(r=>{if(r.status==='won'||r.status==='push'||r.status==='winning'||(r.status==='live'&&r.pace==='ok'))ok++;else if(r.status==='losing'||(r.status==='live'&&r.pace==='bad'))bad++;else unk++});
+  if(!ok&&!bad)return '';const txt=bad?`${bad} ${bad===1?'va':'van'} abajo del ritmo`:unk?`ninguna va mal · ${unk} sin ritmo todavía`:'si siguen así, pega ✓';
+  return `<div class="pfc ${bad?'bad':'ok'}"><b>Pronóstico al ritmo actual</b><span>${ok} de ${e.n} en ruta · ${esc(txt)}</span></div>`}
 function parlayCard(P,e){
   e=e||evalParlay(P);
   const cls=e.status==='lost'?'dead':e.status==='won'?'won':'';
@@ -1314,7 +1332,7 @@ function parlayCard(P,e){
     <span class="pc-pay"><small>${e.status==='won'?'Cobras':'A cobrar'}</small><b class="num">${money(e.payout)}</b></span>
     <span class="pc-m num">${e.n} ${e.n===1?'pierna':'piernas'} · ${money(P.stake)} a ${e.dec?toAm(e.dec):'—'}</span></button>
     <div class="segbar">${e.rs.map(r=>`<i class="${r.status}"></i>`).join('')}</div>
-    <div class="pc-st">${tag}<span>${parts}</span></div>
+    <div class="pc-st">${tag}<span>${parts}</span></div>${parlayForecast(e)}
     <div class="legs">${P.legs.map((L,i)=>legView(L,e.rs[i],P.id)).join('')}</div></article>`}
 function viewLive(){
   const nd=S.parlays.filter(p=>p.settled).length,na=S.parlays.filter(p=>!p.settled).length;
@@ -1797,7 +1815,7 @@ const ntKeyG=k=>'g:'+k,ntKeyT=(lg,id)=>'t:'+lg+':'+id;
 function ntPrefs(g){const kind=LG[g.lg].kind;const ks=[ntKeyG(g.key)];if(g.home&&g.home.id)ks.push(ntKeyT(g.lg,g.home.id));if(g.away&&g.away.id)ks.push(ntKeyT(g.lg,g.away.id));
   const fol=ks.filter(k=>k[0]==='g'?isFavG(g.key):isFav(g.lg,k.split(':')[2]));if(!fol.length)return null;
   const out={};fol.forEach(k=>{const p=S.ntp[k]||ntDefaults(kind);Object.entries(p).forEach(([a,b])=>{if(b)out[a]=true})});return out}
-async function notify(title,body,tag,k){if(!ntOn())return;const o={body,tag,icon:'icon-192.png',badge:'icon-192.png',renotify:true,data:{k:k||''}};
+async function notify(title,body,tag,k){if(!ntOn())return;if(S.pushOK&&!/:lu$|^tutus-on$/.test(tag||''))return;const o={body,tag,icon:'icon-192.png',badge:'icon-192.png',renotify:true,data:{k:k||''}};
   try{const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(reg){await reg.showNotification(title,o);return}}catch(e){}
   try{new Notification(title,o)}catch(e){}}
 async function ntAsk(){if(!('Notification' in window)){toast(isIOS?'Instala la app en tu inicio (Compartir → Agregar a inicio) para recibir avisos':'Este navegador no permite avisos');return false}
@@ -1809,8 +1827,13 @@ const NT_SERVER='https://tutus-avisos.netlify.app';
 async function pushSubscribe(){if(!NT_SERVER||!ntOn()||!('serviceWorker' in navigator)||!('PushManager' in window))return;const reg=await navigator.serviceWorker.ready;
   let sub=await reg.pushManager.getSubscription();if(!sub){const vk=(await fetch(NT_SERVER+'/vapid').then(r=>r.json())).key;const b=vk.replace(/-/g,'+').replace(/_/g,'/');const k=Uint8Array.from(atob(b+'='.repeat((4-b.length%4)%4)),c=>c.charCodeAt(0));sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:k})}
   const items=S.favs.map(f=>({t:'team',lg:f.lg,id:f.id,p:S.ntp[ntKeyT(f.lg,f.id)]||ntDefaults(LG[f.lg].kind)})).concat(S.favGames.map(x=>({t:'game',lg:x.lg,k:x.k,p:S.ntp[ntKeyG(x.k)]||ntDefaults(LG[x.lg].kind)})));
-  await fetch(NT_SERVER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sub,items,parlay:!!S.nt.parlay})})}
-function ntSync(){pushSubscribe().catch(()=>{})}
+  const parlays=S.nt.parlay?S.parlays.filter(P=>!P.settled).map(P=>{const e=evalParlay(P);return {id:P.id,name:P.name||'Parlay',pay:e.payout,legs:P.legs.map(L=>({id:L.id,key:L.key,lg:L.lg,t:L.type,side:L.side||'',line:L.line??null,ou:L.ou||'',mk:L.market||'',ath:L.athleteId||'',an:L.athleteName||'',m:L.m||'',sel:L.sel||'',ti:legTitle(L),rc:L.type==='prop'?propRecipe(LG[L.lg].kind,L.market):null}))}}):[];
+  const body=JSON.stringify({sub,items,parlays});const sig=body.length+':'+items.length+':'+parlays.map(P=>P.id+P.legs.length).join(',');
+  if(S.pushSig===sig&&Date.now()-(S.pushAt||0)<6*36e5)return;
+  const r=await fetch(NT_SERVER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body});if(r.ok){S.pushOK=true;S.pushSig=sig;S.pushAt=Date.now()}}
+function propRecipe(kind,mk){const d=propDef(kind,mk);if(!d)return null;if(Array.isArray(d[2]))return {m:'pick',k:d[2]};if(mk==='dbl'||mk==='tpl'||mk==='outs')return {m:mk};const ks=[];const px=new Proxy({},{get:(t,k)=>{if(typeof k==='string')ks.push(k);return undefined}});try{d[2](px)}catch(e){}return {m:'sum',k:[...new Set(ks)]}}
+let ntSyncT;
+function ntSync(){clearTimeout(ntSyncT);ntSyncT=setTimeout(()=>pushSubscribe().catch(()=>{}),1500)}
 function notifCard(){const on=ntOn();const n=S.favs.length+S.favGames.length;
   const st=!('Notification' in window)?(isIOS?'Instala la app en tu inicio para recibir avisos':'Este navegador no permite avisos'):Notification.permission==='denied'?'Están bloqueados en la configuración del teléfono':on?`Activos · ${n} ${n===1?'cosa':'cosas'} que sigues`:'Goles, inicios y resultados de lo que sigues';
   return `<button class="ncard nbtn" data-a="ntOpen"><span class="nic ${on?'on':''}">${IC.bell}</span><span class="tx"><b>Avisos</b><span>${st}</span></span><i>›</i></button>`}
@@ -1827,7 +1850,7 @@ function sheetNtItem(s){const inf=ntItemInfo(s.key);const p=S.ntp[s.key]||ntDefa
   return {title:'Avisos'+`<div class="sh-sub">${esc(inf.title)}</div>`,html:ntPermBox()+`<div class="nthead">${inf.icon}<div><b>${esc(inf.title)}</b><span>${esc(inf.sub)}</span></div></div><span class="flabel">¿De qué te aviso?</span>`+ntToggles(inf.kind,p,s.key)+`<p class="help">Solo te llegan avisos de tus equipos y de los partidos que sigues.</p>`,foot:`<button class="btn pri wide" data-a="ntDone">Listo</button>`}}
 function sheetNt(s){const items=S.favs.map(f=>ntKeyT(f.lg,f.id)).concat(S.favGames.map(x=>ntKeyG(x.k)));const on=ntOn();
   let h=ntPermBox();
-  h+=`<div class="ntl"><div class="ntr"><span><b>Avisos</b><small>${on?'Encendidos':'Apagados'}</small></span><button class="sw" role="switch" aria-checked="${on}" data-a="ntTog" aria-label="Avisos"><i></i></button></div><div class="ntr"><span><b>Mis parlays</b><small>Cuando una selección cobra o se cae</small></span><button class="sw" role="switch" aria-checked="${!!S.nt.parlay}" data-a="ntOpt" data-v="parlay" aria-label="Mis parlays"><i></i></button></div></div>`;
+  h+=`<div class="ntl"><div class="ntr"><span><b>Avisos</b><small>${on?'Encendidos':'Apagados'}</small></span><button class="sw" role="switch" aria-checked="${on}" data-a="ntTog" aria-label="Avisos"><i></i></button></div><div class="ntr"><span><b>Mis parlays</b><small>Cobró, se cayó, a una de cobrar y resumen con pronóstico</small></span><button class="sw" role="switch" aria-checked="${!!S.nt.parlay}" data-a="ntOpt" data-v="parlay" aria-label="Mis parlays"><i></i></button></div></div>`;
   h+=`<span class="flabel">Lo que sigues</span>`+(items.length?`<div class="res">${items.map(k=>{const inf=ntItemInfo(k);const p=S.ntp[k]||ntDefaults(inf.kind);const n=Object.values(p).filter(Boolean).length;return `<button class="ri" data-a="ntItem" data-k="${esc(k)}"><span class="a">${inf.icon}</span><span class="n">${esc(inf.title)}</span><span class="m">${esc(inf.sub)}</span><span class="r">${n} ${n===1?'aviso':'avisos'} ›</span></button>`}).join('')}</div>`:`<div class="note">Todavía no sigues nada. Toca <b>☆ Seguir</b> en un equipo o en un partido y aquí eliges de qué avisarte.</div>`);
   h+=`<p class="help">${NT_SERVER?'Te llegan aunque la app esté cerrada.':'Por ahora llegan con la app abierta o en segundo plano.'}${isIOS?' En iPhone solo funcionan con la app instalada en tu inicio.':''}</p>`;
   return {title:'Avisos',html:h}}
