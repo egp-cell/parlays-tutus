@@ -1643,6 +1643,7 @@ Montos: "stake" es lo que se apostó (etiquetas como Apuesta, Monto, Importe, To
 Responde SOLO con JSON con esta forma:
 {"stake":número o null,"odds":"texto" o null,"payout":número o null,
  "legs":[{"kind":"prop|ml|spread|total|x","m":"solo para kind x: código del mercado","pick":"team|draw|team_or_draw|no_draw o null","btts":"yes|no o null","score":"goles del equipo-goles del rival o null","parity":"odd|even o null","player":"nombre completo del jugador o null","team":"equipo de esa selección (para prop, el equipo del jugador) o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate,"early":número de ventaja si dice pago anticipado o null}]}
+En TODAS las selecciones de equipo o partido (ml, spread, total, x) pon siempre en "team" el nombre de un equipo de ese partido, aunque el mercado sea de los dos (ambos anotan, total, corners).
 Mercados especiales (kind "x", con "m"): rt = resultado + total (ej. "PSG y más de 2.5 goles": m rt, team PSG, pick team, line 2.5, ou over; "Empate y menos de 2.5": pick draw); rb = resultado + ambos anotan (pick + btts); dc = doble oportunidad (pick team_or_draw con team, o no_draw); btts = ambos anotan (btts yes/no, team cualquiera del partido); dnb = empate no apuesta (team); wtn = gana sin recibir gol (team); cs = portería en cero (team); exs = marcador exacto (team + score desde el punto de vista de ese equipo); h1 / h2 = ganador del 1er / 2º tiempo o mitad (pick team|draw); h1t / h2t = total del 1er / 2º tiempo (line, ou); q1 / q1t = ganador / total del 1er cuarto o periodo; tt = total de un equipo (team, line, ou); corn = tiros de esquina totales (line, ou); card = tarjetas totales (line, ou); oe = total par/non (parity); nrfi = carrera en la 1ª entrada (btts yes = hay carrera, no = no hay); reg = ganador en tiempo regular de hockey (pick).
 Reglas: "prop" es estadística de un jugador (ej. "LeBron James Más de 24.5 puntos" → kind prop, market pts, line 24.5, ou over). "ml" es ganador del partido / 1X2 / línea de dinero. "spread" es hándicap o línea de puntos/carreras/goles (line con su signo, ej. -3.5). "total" es altas/bajas/más-menos del partido completo (team = el equipo local de ese partido).
 "Más de / Over / Alta / O" = over; "Menos de / Under / Baja / U" = under. "Anota TD" o "anota gol" en cualquier momento es prop con line 0.5 y ou over. Un "18+ puntos" es line 17.5 over.
@@ -1711,12 +1712,12 @@ function parseOcr(text,ix){
   if(!odds){const am=[...all.matchAll(/(?:^|\s)\+(\d{3,6})(?!\d)/g)].map(m=>Number(m[1]));if(am.length)odds='+'+Math.max(...am)}
   return {legsResolved:legs,stake,odds,payout,unknown:[]}}
 function resolveClaude(data,ix){
-  const out=[],unknown=[];
+  const out=[],unknown=[];let lastTm=(data.legs||[]).map(l=>l.kind!=='prop'&&l.team&&idxTeam(ix,l.team)).find(Boolean)||null;
   (data.legs||[]).forEach(l=>{const desc=[l.player,l.team,l.market,l.ou,l.line].filter(x=>x!=null&&x!=='').join(' ');
     if(l.kind==='prop'){const p=idxPlayer(ix,l.player||'',l.team);if(!p||l.line==null){unknown.push(desc);return}const kind=LG[p.g.lg].kind;
       const market=propDef(kind,l.market)?l.market:marketFrom(kind,norm(l.market||''));if(!market){unknown.push(desc);return}
       out.push({kind:'prop',p,market,line:Number(l.line),ou:l.ou==='under'?'under':'over'})}
-    else{const tm=idxTeam(ix,l.team||'');if(!tm){unknown.push(desc);return}
+    else{const tm=idxTeam(ix,l.team||'')||(['x','total'].includes(l.kind)&&!l.team?lastTm:null);if(!tm){unknown.push(desc);return}lastTm=tm;
       if(l.kind==='x'){const sd=tm.side==='home'?'h':'a',pk=l.pick==='draw'?'d':sd,yn=l.btts==='yes'?'y':'n',ln=l.line!=null?Number(l.line):null,ou=l.ou==='under'?'under':'over';const m=String(l.m||'');let x=null;
         if(m==='rt'&&ln!=null)x={m,sel:pk,line:ln,ou};else if(m==='rb')x={m,sel:pk+'|'+yn};else if(m==='dc')x={m,sel:l.pick==='no_draw'?'ha':sd+'X'};else if(m==='btts'||m==='nrfi')x={m,sel:yn};
         else if(['dnb','wtn','cs'].includes(m))x={m,sel:sd};else if(m==='exs'&&l.score){const [a,b]=String(l.score).split('-').map(Number);if(isFinite(a)&&isFinite(b))x={m,sel:tm.side==='home'?a+'-'+b:b+'-'+a}}
