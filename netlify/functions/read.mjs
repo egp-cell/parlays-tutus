@@ -1,6 +1,6 @@
 // Lee capturas de boletos con Gemini (Google AI Studio, plan gratis, sin facturación). La llave vive en la variable GEMINI_KEY de Netlify.
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'POST, OPTIONS' };
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const MODELS = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-flash-lite-latest'];
 
 export default async (req) => {
   if (req.method === 'OPTIONS') return new Response('', { headers: CORS });
