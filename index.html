@@ -69,6 +69,7 @@ main::-webkit-scrollbar{display:none}
 .duo{position:relative;width:44px;height:44px;flex:none;display:block}
 .duo .tl{--s:30px;position:absolute}
 .duo .tl:first-child{left:0;top:0} .duo .tl:last-child{right:0;bottom:0;box-shadow:0 0 0 2.5px var(--surface)}
+.tl:has(img){background:transparent;box-shadow:none!important;overflow:visible} .tl:has(img)>b{display:none} .duo .tl img,.opp .tl img{filter:drop-shadow(0 1px 2px rgba(0,0,0,.75))}
 
 /* Resumen */
 .hero{padding:6px 2px 18px;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:end}
@@ -1067,9 +1068,10 @@ function save(){if(typeof ntSync==='function'&&S.nt&&S.nt.on)ntSync();store(K()+
 function load(){S.parlays=store(K()+'_parlays')||(S.mode==='demo'?MOCK.seedParlays():[]);S.draft=store(K()+'_draft')||{legs:[],stake:'',odds:'',name:''};S.favs=store(K()+'_favs')||[];S.favLg=store(K()+'_favlg')||[]}
 
 /* ================= Evaluación automática de cada pierna ================= */
-function legTitle(L){if(L.type==='x')return xTitle(L);if(L.type==='prop')return L.athleteName;if(L.type==='ml')return L.side==='draw'?'Empate':`${L.teamName||L.teamAbbr} gana`;if(L.type==='spread')return `${L.teamName||L.teamAbbr} ${signed(L.line)}`;return `${L.ou==='over'?'Más':'Menos'} de ${L.line}`}
+const lnTxt=(ou,ln)=>{const h=Math.abs(ln%1-0.5)<1e-9;return ou==='over'?(h?`${Math.ceil(ln)} o más`:`Más de ${ln}`):(h?`${Math.floor(ln)} o menos`:`Menos de ${ln}`)};
+function legTitle(L){if(L.type==='x')return xTitle(L);if(L.type==='prop')return L.athleteName;if(L.type==='ml')return L.side==='draw'?'Empate':`${L.teamName||L.teamAbbr} gana`;if(L.type==='spread')return `${L.teamName||L.teamAbbr} ${signed(L.line)}`;return `${L.ou==='over'?'Más':'Menos'} de ${L.line} ${UNIT[LG[L.lg]?.kind]||''}`.trim()}
 function legSub(L){const kind=LG[L.lg]?.kind;if(L.type==='x')return xSub(L);if(L.type==='spread'&&kind==='tennis')return `Hándicap de sets · ${L.matchup}`;
-  if(L.type==='prop'){const d=propDef(kind,L.market);const lab=d?d[1]:L.market;if(L.ou==='over'&&L.line===0.5&&YESNO.has(L.market))return `${lab} · ${L.teamAbbr}`;return `${lab} · ${L.ou==='over'?'Más':'Menos'} de ${L.line}`}
+  if(L.type==='prop'){const d=propDef(kind,L.market);const lab=d?d[1]:L.market;if(L.ou==='over'&&L.line===0.5&&YESNO.has(L.market))return `${lab} · ${L.teamAbbr}`;return `${lab} · ${lnTxt(L.ou,L.line)}`}
   if(L.type==='total')return `Total del partido · ${L.matchup}`;if(L.type==='ml'&&L.early)return `Ganador · pago anticipado +${L.early} · ${L.matchup}`;return `${L.type==='ml'?'Ganador':'Hándicap'} · ${L.matchup}`}
 function gameLine(g){if(g.type==='event'){if(LG[g.lg].kind==='racing'){const fs=f1Session(g);return `${gpInfo(g.name).n}${fs?' · '+sesName(fs.c)+(fs.c.status?.type?.state==='in'?' en vivo':fs.c.status?.type?.state==='post'?' terminada':''):''}`}return `${g.name}${g.state==='in'?' · en juego':g.state==='post'?' · final':''}`}if(LG[g.lg]?.kind==='tennis'){if(g.state==='pre')return `${g.away.abbr} vs ${g.home.abbr} · ${g.detail}`;if(g.state==='post')return `${g.away.abbr} vs ${g.home.abbr} · ${g.detail}`;const i=(g.period||1)-1;const a=g.away.sets[i],b=g.home.sets[i];return `${g.detail}${a&&b?` · ${a.v}–${b.v} en games`:''}`}return g.state==='pre'?`${g.away.abbr} @ ${g.home.abbr} · ${g.detail}`:`${g.away.abbr} ${g.away.score}–${g.home.score} ${g.home.abbr} · ${g.detail}`}
 /* ===== Pronóstico al ritmo actual ===== */
@@ -1134,10 +1136,14 @@ function ouR(r,v,L,end,unit){r.v=v;const max=Math.max(L.line*1.25,v,1);r.prog=Ma
 function sideR(r,d,end,txt){r.status=end?(d>0?'won':d<0?'lost':'push'):(d>0?'winning':d<0?'losing':'even');r.msg=txt;return r}
 const f1SesOf=(g,re)=>(g.raw.competitions||[]).find(c=>re.test((c.type&&c.type.abbreviation)||''));
 const F1RE={f1w:/^Race$/,f1t:/^Race$/,f1h:/^Race$/,f1p:/^Qual$/,f1s:/^(SR|Sprint|SS)$/};
+function cornersByHalf(j){const c=j&&j.header&&j.header.competitions&&j.header.competitions[0];const com=j&&j.commentary;if(!c||!Array.isArray(com))return null;const nm={};(c.competitors||[]).forEach(t=>{const tt=t.team||{};[tt.displayName,tt.shortDisplayName,tt.name,tt.abbreviation].filter(Boolean).forEach(n=>nm[String(n).toLowerCase()]=t.homeAway)});
+  const o={h1:{home:0,away:0},h2:{home:0,away:0}};let any=false;com.forEach(x=>{const t=String(x.text||'');const m=t.match(/^Corner,\s*([^.]+)\./);if(!m)return;any=true;const side=nm[m[1].trim().toLowerCase()];if(!side)return;const d=String((x.time&&x.time.displayValue)||'');const mn=parseInt(d)||0;const h=(mn<=45||/^45'\+/.test(d))?'h1':'h2';o[h][side]++});return any||com.length?o:null}
 function xCore(L,g,kind,fin){const hs=g.home.score,as=g.away.score,tot=hs+as,sc=as+'-'+hs;const W=(ok,dead)=>fin?(ok?'won':'lost'):dead?'lost':(ok?'winning':'losing');
   const hl=g.home.ls||[],al=g.away.ls||[];const sum=(x,a,b)=>x.slice(a,b).reduce((p,c)=>p+(Number(c)||0),0);
   const resOk=s=>s==='h'?hs>as:s==='a'?as>hs:hs===as;
   switch(L.m){
+    case 'c1':{if(!g.cor)return {wait:true};const v=g.cor.h1.home+g.cor.h1.away;const done=fin||g.cor.h2.home+g.cor.h2.away>0||g.period>=2||/half|medio|2nd|2º/i.test(g.detail||g.det||'');return {ou:v,done,unit:'corners'}}
+    case 'tc':{const ts=g.tstats;if(!ts)return {wait:true};return {ou:(ts[L.side]||{}).wonCorners||0,done:fin,unit:'corners'}}
     case 'rt':{const r=resOk(L.sel),t=L.ou==='over'?tot>L.line:tot<L.line;const dead=L.ou==='under'&&tot>L.line;return {st:W(r&&t,dead),msg:`Va ${sc} · ${tot} ${kind==='soccer'?'goles':'en total'}`,v:sc}}
     case 'rb':{const [rs,bt]=String(L.sel).split('|');const r=resOk(rs),b=hs>0&&as>0;const t=bt==='y'?b:!b;const dead=bt==='n'&&b;return {st:W(r&&t,dead),msg:`Va ${sc}`,v:sc}}
     case 'dnb':{const d=L.sel==='h'?hs-as:as-hs;return {st:fin?(d>0?'won':d<0?'lost':'push'):(d>0?'winning':d<0?'losing':'even'),msg:d===0?(fin?'Empate · se anula':'Empatados · se anularía'):`Va ${sc}`,v:sc}}
@@ -1183,27 +1189,28 @@ function evalX(L,r,ev,g,kind,fin){
     case 'h1':case 'h1t':{const N=H1N[kind]||1;const a=g.away.ls||[],h=g.home.ls||[];const sm=x=>x.slice(0,N).reduce((p,c)=>p+(Number(c)||0),0);const done=fin||a.length>N||h.length>N||(kind==='soccer'&&/medio tiempo|half/i.test(g.detail));const av=sm(a),hv=sm(h);
       if(L.m==='h1t')return ouR(r,av+hv,L,done);
       r.v=`${av}-${hv}`;const ok=L.sel==='h'?hv>av:L.sel==='a'?av>hv:av===hv;r.status=done?(ok?'won':'lost'):(ok?'winning':'losing');r.msg=done?(ok?'Cobró':'No se dio'):`${H1L[kind]}: ${g.away.abbr} ${av}-${hv} ${g.home.abbr}`;return r}}
-  const xc=xCore(L,g,kind,fin);if(xc){if(xc.ou!=null){if(xc.pre){r.status='pending';r.msg='Empieza en la 2ª mitad';return r}return ouR(r,xc.ou,L,xc.done)}r.status=xc.st;r.msg=fin?xc.msg.replace(/^Va /,'Quedó '):xc.msg;r.v=xc.v;return r}
+  const xc=xCore(L,{...g,cor:ev.cor,tstats:ev.tstats},kind,fin);if(xc){if(xc.wait){r.status='live';r.msg='Esperando estadísticas';return r}if(xc.ou!=null){if(xc.pre){r.status='pending';r.msg='Empieza en la 2ª mitad';return r}return addPace(ouR(r,xc.ou,L,xc.done,xc.unit),xc.ou,L,xc.unit&&L.m==='c1'?null:gameFrac(g))}r.status=xc.st;r.msg=fin?xc.msg.replace(/^Va /,'Quedó '):xc.msg;r.v=xc.v;return r}
   r.msg='Mercado no reconocido';return r}
+const UNIT={soccer:'goles',basketball:'puntos',football:'puntos',hockey:'goles',baseball:'carreras'};
 const xWho=(L,s)=>s==='h'?L.hAbbr:s==='a'?L.aAbbr:'Empate';const Q1N=k=>k==='hockey'?'periodo':'cuarto';
 function xTitle(L){const kind=LG[L.lg]?.kind;const tn=L.teamName||L.teamAbbr||'';const ou=L.ou==='over'?'Más':'Menos';
   switch(L.m){case 'dc':return {hX:`${L.hAbbr} o empate`,aX:`${L.aAbbr} o empate`,ha:'Sin empate (gana cualquiera)'}[L.sel];case 'btts':return `Ambos anotan: ${L.sel==='y'?'Sí':'No'}`;
-    case 'tt':return `${tn}: ${ou.toLowerCase()} de ${L.line}`;case 'corn':return `${ou} de ${L.line} tiros de esquina`;case 'card':return `${ou} de ${L.line} tarjetas`;
-    case 'h1':return L.sel==='d'?`Empate al ${H1L[kind]}`:`${L.sel==='h'?L.hAbbr:L.aAbbr} gana ${kind==='baseball'?'las':'el'} ${H1L[kind]}`.replace('el 1ª','la 1ª');case 'h1t':return `${ou} de ${L.line} · ${H1L[kind]}`;
+    case 'tt':return `${tn}: ${ou.toLowerCase()} de ${L.line} ${UNIT[kind]||''}`.trim();case 'corn':return `${ou} de ${L.line} tiros de esquina`;case 'card':return `${ou} de ${L.line} tarjetas`;
+    case 'h1':return L.sel==='d'?`Empate al ${H1L[kind]}`:`${L.sel==='h'?L.hAbbr:L.aAbbr} gana ${kind==='baseball'?'las':'el'} ${H1L[kind]}`.replace('el 1ª','la 1ª');case 'h1t':return `${ou} de ${L.line} ${UNIT[kind]||''} · ${H1L[kind]}`;
     case 'tg':return `${ou} de ${L.line} games`;case 'ts':return `${ou} de ${L.line} sets`;case 'tgs':return `${tn} ${signed(L.line)} games`;case 's1':return `${tn} gana el 1er set`;case 'w1s':return `${tn} gana al menos un set`;case 'tcs':return `${tn} gana ${L.sel}`;
     case 'f1w':return `${L.athName} gana`;case 'f1t':return L.n===3?`${L.athName} en el podio`:`${L.athName} top ${L.n}`;case 'f1p':return `${L.athName} hace la pole`;case 'f1s':return `${L.athName} gana el sprint`;case 'f1h':return `${L.athName} le gana a ${L.ath2Name}`;
-    case 'rt':return `${xWho(L,L.sel)} y ${ou.toLowerCase()} de ${L.line}`;case 'rb':{const [a,b]=String(L.sel).split('|');return `${xWho(L,a)} y ambos anotan: ${b==='y'?'Sí':'No'}`}
+    case 'rt':return `${xWho(L,L.sel)} y ${ou.toLowerCase()} de ${L.line} ${UNIT[kind]||''}`.trim();case 'c1':return `${ou} de ${L.line} corners · 1er tiempo`;case 'tc':return `${tn}: ${ou.toLowerCase()} de ${L.line} corners`;case 'rb':{const [a,b]=String(L.sel).split('|');return `${xWho(L,a)} y ambos anotan: ${b==='y'?'Sí':'No'}`}
     case 'dnb':return `${xWho(L,L.sel)} · empate no apuesta`;case 'wtn':return `${xWho(L,L.sel)} gana sin recibir gol`;case 'cs':return `${xWho(L,L.sel)}: portería en cero`;
     case 'exs':{const [h,a]=String(L.sel).split('-');return `Marcador ${L.aAbbr} ${a}-${h} ${L.hAbbr}`}case 'oe':return `Total ${L.sel==='o'?'non':'par'}`;
     case 'nrfi':return L.sel==='n'?'Sin carreras en la 1ª entrada':'Hay carrera en la 1ª entrada';case 'reg':return L.sel==='d'?'Empate en tiempo regular':`${xWho(L,L.sel)} gana en tiempo regular`;
-    case 'h2':return L.sel==='d'?'Empate en la 2ª mitad':`${xWho(L,L.sel)} gana la 2ª mitad`;case 'h2t':return `${ou} de ${L.line} · 2ª mitad`;
-    case 'q1':return L.sel==='d'?`Empate en el 1er ${Q1N(kind)}`:`${xWho(L,L.sel)} gana el 1er ${Q1N(kind)}`;case 'q1t':return `${ou} de ${L.line} · 1er ${Q1N(kind)}`;
+    case 'h2':return L.sel==='d'?'Empate en la 2ª mitad':`${xWho(L,L.sel)} gana la 2ª mitad`;case 'h2t':return `${ou} de ${L.line} ${UNIT[kind]||''} · ${kind==='soccer'?'2º tiempo':'2ª mitad'}`;
+    case 'q1':return L.sel==='d'?`Empate en el 1er ${Q1N(kind)}`:`${xWho(L,L.sel)} gana el 1er ${Q1N(kind)}`;case 'q1t':return `${ou} de ${L.line} ${UNIT[kind]||''} · 1er ${Q1N(kind)}`;
     case 'gw':return `${L.athName} gana el torneo`;case 'gt':return `${L.athName} top ${L.n}`;case 'gc':return `${L.athName} ${L.sel==='y'?'pasa':'no pasa'} el corte`;case 'gh':return `${L.athName} le gana a ${L.ath2Name}`}return 'Selección'}
-function xSub(L){const kind=LG[L.lg]?.kind;const G={dc:'Doble oportunidad',btts:'Ambos anotan',tt:'Total del equipo',corn:'Tiros de esquina',card:'Tarjetas',h1:'Ganador '+(H1L[kind]||''),h1t:'Total '+(H1L[kind]||''),tg:'Total de games',ts:'Total de sets',tgs:'Hándicap de games',s1:'1er set',w1s:'Gana un set',tcs:'Resultado exacto',rt:'Resultado y total',rb:'Resultado y ambos anotan',dnb:'Empate no apuesta',wtn:'Gana sin recibir gol',cs:'Portería en cero',exs:'Marcador exacto',oe:'Par o non',nrfi:'1ª entrada',reg:'Tiempo regular',h2:'Ganador 2ª mitad',h2t:'Total 2ª mitad',q1:'1er '+Q1N(kind),q1t:'Total 1er '+Q1N(kind),f1w:'Carrera',f1t:'Carrera',f1p:'Clasificación',f1s:'Sprint',f1h:'Duelo en carrera',gw:'Ganador',gt:'Top '+(L.n||''),gc:'Corte',gh:'Duelo'};return `${G[L.m]||''} · ${L.matchup}`}
+function xSub(L){const kind=LG[L.lg]?.kind;const G={dc:'Doble oportunidad',btts:'Ambos anotan',tt:'Total del equipo',corn:'Tiros de esquina',card:'Tarjetas',h1:'Ganador '+(H1L[kind]||''),h1t:'Total '+(H1L[kind]||''),tg:'Total de games',ts:'Total de sets',tgs:'Hándicap de games',s1:'1er set',w1s:'Gana un set',tcs:'Resultado exacto',rt:'Resultado y total',c1:'Corners 1er tiempo',tc:'Corners del equipo',rb:'Resultado y ambos anotan',dnb:'Empate no apuesta',wtn:'Gana sin recibir gol',cs:'Portería en cero',exs:'Marcador exacto',oe:'Par o non',nrfi:'1ª entrada',reg:'Tiempo regular',h2:'Ganador 2ª mitad',h2t:'Total 2ª mitad',q1:'1er '+Q1N(kind),q1t:'Total 1er '+Q1N(kind),f1w:'Carrera',f1t:'Carrera',f1p:'Clasificación',f1s:'Sprint',f1h:'Duelo en carrera',gw:'Ganador',gt:'Top '+(L.n||''),gc:'Corte',gh:'Duelo'};return `${G[L.m]||''} · ${L.matchup}`}
 /* constructor de opciones */
 const optBtn=(q,label,sub)=>`<button class="opt" data-a="toggleLeg" data-q="${qAttr(q)}" aria-pressed="${!!inDraft(q)}"><b>${label}</b>${inDraft(q)?'<small>✓ En tu parlay</small>':sub?`<small>${sub}</small>`:''}</button>`;
 const optRow=(n,items)=>`<div class="opts" style="--n:${n}">${items.join('')}</div>`;
-function ouBlock(s,name,lab,def,mk){const ln=lnv(s,name,def);const Ov=mk({line:ln,ou:'over'}),Un=mk({line:ln,ou:'under'});return `<span class="flabel">${lab}</span>${lineInput(name,ln)}${optRow(2,[optBtn(Ov,'Más de '+ln),optBtn(Un,'Menos de '+ln)])}`}
+function ouBlock(s,name,lab,def,mk){const ln=lnv(s,name,def);const Ov=mk({line:ln,ou:'over'}),Un=mk({line:ln,ou:'under'});return `<span class="flabel">${lab}</span>${lineInput(name,ln)}${optRow(2,[optBtn(Ov,'Más de '+ln,Math.abs(ln%1-0.5)<1e-9?Math.ceil(ln)+' o más':''),optBtn(Un,'Menos de '+ln,Math.abs(ln%1-0.5)<1e-9?Math.floor(ln)+' o menos':'')])}`}
 function teamMore(s,g,kind,base){const X=o=>({...base,type:'x',hAbbr:g.home.abbr,aAbbr:g.away.abbr,...o});const H=esc(g.home.abbr),A=esc(g.away.abbr);
   const soc=kind==='soccer';const od=g.odds||{};
   const groups=soc?[['comb','Combinadas'],['res','Resultado'],['gol','Goles'],['mitad','Por tiempo'],['ct','Corners y tarjetas']]:[['comb','Combinadas'],['res','Resultado'],['mitad',kind==='baseball'?'Entradas':'Por periodo'],['pts',kind==='baseball'?'Carreras':kind==='hockey'?'Goles':'Puntos']];
@@ -1237,7 +1244,7 @@ function teamMore(s,g,kind,base){const X=o=>({...base,type:'x',hAbbr:g.home.abbr
         h+=ouBlock(s,'h2t','Total 2ª mitad',{basketball:110.5,football:21.5}[kind],o=>X({m:'h2t',...o}))}
       if(kind!=='baseball'){h+=`<span class="flabel">Ganador del 1er ${Q1N(kind)}</span>`+optRow(kind==='hockey'?3:2,[optBtn(X({m:'q1',sel:'a'}),A),...(kind==='hockey'?[optBtn(X({m:'q1',sel:'d'}),'Empate')]:[]),optBtn(X({m:'q1',sel:'h'}),H)]);
         h+=ouBlock(s,'q1t','Total 1er '+Q1N(kind),{basketball:55.5,football:9.5,hockey:1.5}[kind],o=>X({m:'q1t',...o}))}}}
-  else if(mt==='ct'){h+=ouBlock(s,'corn','Tiros de esquina (los dos equipos)',9.5,o=>X({m:'corn',...o}));h+=ouBlock(s,'card','Tarjetas (los dos equipos)',4.5,o=>X({m:'card',...o}))}
+  else if(mt==='ct'){h+=ouBlock(s,'corn','Tiros de esquina (los dos equipos)',9.5,o=>X({m:'corn',...o}));h+=ouBlock(s,'c1','Corners del 1er tiempo',4.5,o=>X({m:'c1',...o}));[['away',g.away],['home',g.home]].forEach(([sd,t])=>{h+=ouBlock(s,'tc'+sd,`Corners de ${esc(t.name)}`,4.5,o=>X({m:'tc',side:sd,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamLogo:t.logo,...o}))});h+=ouBlock(s,'card','Tarjetas (los dos equipos)',4.5,o=>X({m:'card',...o}))}
   else if(mt==='pts'){const td={basketball:112.5,football:22.5,hockey:2.5,baseball:4.5}[kind];
     [['away',g.away],['home',g.home]].forEach(([sd,t])=>{h+=ouBlock(s,'tt'+sd,`Total de ${esc(t.name)}`,td,o=>X({m:'tt',side:sd,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamLogo:t.logo,...o}))})}
   return h}
@@ -1292,7 +1299,7 @@ function trackChanges(first){
 let timer=null,syncing=false,firstSync=true;
 async function fetchEvent(k){if(EVK.includes(LG[k.split(':')[0]]?.kind))return refreshEvt(k);const[lg,id]=k.split(':');const j=await api.summary(lg,id);const c=j.header.competitions[0];const old=S.ev[k];const g=normComp(lg,id,c,c.date);
   if(!g.odds&&old&&old.g)g.odds=old.g.odds;const ts={};((j.boxscore&&j.boxscore.teams)||[]).forEach(t=>{const id=String(t.team&&t.team.id);const side=id===g.home.id?'home':id===g.away.id?'away':null;if(!side)return;const o={};(t.statistics||[]).forEach(x=>{const v=Number(x.value??x.displayValue);if(isFinite(v))o[x.name]=v});ts[side]=o});
-  S.ev[k]={g,stats:playerStats(j),tstats:ts.home||ts.away?ts:null,full:true,at:Date.now()};return S.ev[k]}
+  S.ev[k]={g,stats:playerStats(j),tstats:ts.home||ts.away?ts:null,cor:LG[lg]?.kind==='soccer'?cornersByHalf(j):null,full:true,at:Date.now()};return S.ev[k]}
 async function sync(){
   if(syncing)return;syncing=true;if(S.mode==='demo')MOCK.tick();
   const keys=new Set();S.parlays.filter(p=>!p.settled).forEach(p=>p.legs.forEach(l=>keys.add(l.key)));S.favGames.forEach(x=>keys.add(x.k));
@@ -1607,11 +1614,11 @@ const MK_WORDS=[['pra',/(pts\s*\+\s*reb\s*\+\s*ast|puntos\s*\+\s*rebotes\s*\+\s*
   ['k',/(ponches|strikeouts)/],['hr',/(jonr|home run)/],['hrr',/(hits\s*\+\s*runs\s*\+\s*rbi|h\s*\+\s*c\s*\+\s*ci)/],['rbi',/(impulsadas|\brbi)/],['h',/(\bhits?\b)/],
   ['sot',/(tiros a (puerta|gol)|shots on target)/],['sog',/(shots on goal|tiros a gol)/],['sh',/(tiros|shots)/],['g',/(anota|goleador|\bgol\b|goal)/],['a',/(asistencia)/],['sv',/(atajadas|saves)/],['p',/(\bpuntos\b|\bpoints\b)/]];
 function marketFrom(kind,txt){for(const[k,re] of MK_WORDS){if(propDef(kind,k)&&re.test(txt))return k}return null}
-async function scanIndex(){
-  const offs=S.mode==='demo'?[0]:[-1,0,1];
-  await Promise.all(offs.map(o=>loadDay(o,LEAGUES.map(l=>l.id))));
-  const games=offs.flatMap(o=>dayGames(o)).filter(g=>g.type!=='event');
-  await Promise.all(games.filter(g=>LG[g.lg].pro).flatMap(g=>[loadRoster(g.lg,g.away),loadRoster(g.lg,g.home)]));
+async function scanGames(){const offs=S.mode==='demo'?[0]:[-1,0,1];
+  await Promise.all(offs.map(o=>loadDay(o,LEAGUES.map(l=>l.id))));return offs.flatMap(o=>dayGames(o)).filter(g=>g.type!=='event')}
+async function scanIndex(only){
+  const games=await scanGames();
+  await Promise.all(games.filter(g=>LG[g.lg].pro&&(!only||only(g))).flatMap(g=>[loadRoster(g.lg,g.away),loadRoster(g.lg,g.home)]));
   const rank={in:0,pre:1,post:2};const players=[],teams=[],lastCount={};
   games.sort((a,b)=>rank[a.state]-rank[b.state]).forEach(g=>[['away',g.away],['home',g.home]].forEach(([side,t])=>{
     teams.push({g,side,t});const seen=new Set();
@@ -1638,15 +1645,15 @@ function ticketPrompt(ix){
   const mk=Object.entries(PROPS).map(([k,v])=>`${k}: ${v.map(x=>x[0]+'='+x[1]).join(', ')}`).join('\n');
   return `Las imágenes son capturas de UN mismo boleto de apuesta (parlay/combinada) de un casino en línea (Caliente, Codere, Bet365, Playdoit, Strendus, DraftKings, FanDuel, etc.), en orden; puede venir partido en varias capturas. Léelo con cuidado, como lo leería una persona.
 Extrae cada selección UNA sola vez (si aparece repetida entre capturas, cuéntala una vez). No inventes selecciones: si algo no se ve claro, no lo pongas.
-Montos: "stake" es lo que se apostó (etiquetas como Apuesta, Monto, Importe, Total apostado, Stake, Wager, Apostar). "payout" es el pago total o ganancia potencial (Ganancia potencial, Pago potencial, Posibles ganancias, A cobrar, Premio, To win, Payout). Escribe solo el número, sin $ ni comas (ej. 250 o 1875.5). No confundas el momio con montos.
+Montos: "stake" es lo que se apostó (etiquetas como Apuesta, Monto, Importe, Total apostado, Stake, Wager, Apostar). "payout" es el pago total o ganancia potencial (Ganancia potencial, Pago potencial, Posibles ganancias, A cobrar, Premio, To win, Payout). Escribe solo el número, sin $ ni comas (ej. 250 o 1875.5). NUNCA uses como monto una fecha, hora, número de boleto, ID o código de referencia: el monto siempre va junto a la palabra de apuesta/importe o con signo de moneda. No confundas el momio con montos.
 "odds" es el momio total del boleto tal cual aparece (americano como +550 o decimal como 6.50); si solo aparecen momios por selección, deja null.
 Responde SOLO con JSON con esta forma:
 {"stake":número o null,"odds":"texto" o null,"payout":número o null,
  "legs":[{"kind":"prop|ml|spread|total|x","m":"solo para kind x: código del mercado","pick":"team|draw|team_or_draw|no_draw o null","btts":"yes|no o null","score":"goles del equipo-goles del rival o null","parity":"odd|even o null","player":"nombre completo del jugador o null","team":"equipo de esa selección (para prop, el equipo del jugador) o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate,"early":número de ventaja si dice pago anticipado o null}]}
 En TODAS las selecciones de equipo o partido (ml, spread, total, x) pon siempre en "team" el nombre de un equipo de ese partido, aunque el mercado sea de los dos (ambos anotan, total, corners).
-Mercados especiales (kind "x", con "m"): rt = resultado + total (ej. "PSG y más de 2.5 goles": m rt, team PSG, pick team, line 2.5, ou over; "Empate y menos de 2.5": pick draw); rb = resultado + ambos anotan (pick + btts); dc = doble oportunidad (pick team_or_draw con team, o no_draw); btts = ambos anotan (btts yes/no, team cualquiera del partido); dnb = empate no apuesta (team); wtn = gana sin recibir gol (team); cs = portería en cero (team); exs = marcador exacto (team + score desde el punto de vista de ese equipo); h1 / h2 = ganador del 1er / 2º tiempo o mitad (pick team|draw); h1t / h2t = total del 1er / 2º tiempo (line, ou); q1 / q1t = ganador / total del 1er cuarto o periodo; tt = total de un equipo (team, line, ou); corn = tiros de esquina totales (line, ou); card = tarjetas totales (line, ou); oe = total par/non (parity); nrfi = carrera en la 1ª entrada (btts yes = hay carrera, no = no hay); reg = ganador en tiempo regular de hockey (pick).
+Mercados especiales (kind "x", con "m"): rt = resultado + total (ej. "PSG y más de 2.5 goles": m rt, team PSG, pick team, line 2.5, ou over; "Empate y menos de 2.5": pick draw); rb = resultado + ambos anotan (pick + btts); dc = doble oportunidad (pick team_or_draw con team, o no_draw); btts = ambos anotan (btts yes/no, team cualquiera del partido); dnb = empate no apuesta (team); wtn = gana sin recibir gol (team); cs = portería en cero (team); exs = marcador exacto (team + score desde el punto de vista de ese equipo); h1 / h2 = ganador del 1er / 2º tiempo o mitad (pick team|draw); h1t / h2t = total del 1er / 2º tiempo (line, ou); q1 / q1t = ganador / total del 1er cuarto o periodo; tt = total de un equipo (team, line, ou); corn = tiros de esquina totales del partido (line, ou); c1 = tiros de esquina del 1er tiempo (line, ou); tc = tiros de esquina de un equipo (team, line, ou); card = tarjetas totales (line, ou); oe = total par/non (parity); nrfi = carrera en la 1ª entrada (btts yes = hay carrera, no = no hay); reg = ganador en tiempo regular de hockey (pick).
 Reglas: "prop" es estadística de un jugador (ej. "LeBron James Más de 24.5 puntos" → kind prop, market pts, line 24.5, ou over). "ml" es ganador del partido / 1X2 / línea de dinero. "spread" es hándicap o línea de puntos/carreras/goles (line con su signo, ej. -3.5). "total" es altas/bajas/más-menos del partido completo (team = el equipo local de ese partido).
-"Más de / Over / Alta / O" = over; "Menos de / Under / Baja / U" = under. "Anota TD" o "anota gol" en cualquier momento es prop con line 0.5 y ou over. Un "18+ puntos" es line 17.5 over.
+"Más de / Over / Alta / O" = over; "Menos de / Under / Baja / U" = under. "Anota TD" o "anota gol" en cualquier momento es prop con line 0.5 y ou over. Un "18+ puntos" o "2 o más tiros" es line 17.5 / 1.5 over. Distingue "tiros" (market sh) de "tiros a puerta / a gol" (market sot).
 Claves de mercado por deporte:
 ${mk}
 Partidos disponibles (usa exactamente estos nombres de equipo):
@@ -1721,14 +1728,16 @@ function resolveClaude(data,ix){
       if(l.kind==='x'){const sd=tm.side==='home'?'h':'a',pk=l.pick==='draw'?'d':sd,yn=l.btts==='yes'?'y':'n',ln=l.line!=null?Number(l.line):null,ou=l.ou==='under'?'under':'over';const m=String(l.m||'');let x=null;
         if(m==='rt'&&ln!=null)x={m,sel:pk,line:ln,ou};else if(m==='rb')x={m,sel:pk+'|'+yn};else if(m==='dc')x={m,sel:l.pick==='no_draw'?'ha':sd+'X'};else if(m==='btts'||m==='nrfi')x={m,sel:yn};
         else if(['dnb','wtn','cs'].includes(m))x={m,sel:sd};else if(m==='exs'&&l.score){const [a,b]=String(l.score).split('-').map(Number);if(isFinite(a)&&isFinite(b))x={m,sel:tm.side==='home'?a+'-'+b:b+'-'+a}}
-        else if(['h1','h2','q1','reg'].includes(m))x={m,sel:pk};else if(['h1t','h2t','q1t','corn','card'].includes(m)&&ln!=null)x={m,line:ln,ou};
-        else if(m==='tt'&&ln!=null)x={m,side:tm.side,teamAbbr:tm.t.abbr,teamName:tm.t.name,teamColor:tm.t.color,teamLogo:tm.t.logo,line:ln,ou};else if(m==='oe')x={m,sel:l.parity==='odd'?'o':'e'};
+        else if(['h1','h2','q1','reg'].includes(m))x={m,sel:pk};else if(['h1t','h2t','q1t','corn','card','c1'].includes(m)&&ln!=null)x={m,line:ln,ou};
+        else if((m==='tt'||m==='tc')&&ln!=null)x={m,side:tm.side,teamAbbr:tm.t.abbr,teamName:tm.t.name,teamColor:tm.t.color,teamLogo:tm.t.logo,line:ln,ou};else if(m==='oe')x={m,sel:l.parity==='odd'?'o':'e'};
         if(!x){unknown.push(desc);return}out.push({kind:'x',tm,x});return}
       if(l.kind==='ml')out.push({kind:'ml',tm,draw:!!l.draw,early:l.early?(Number(l.early)||EARLY[LG[tm.g.lg].kind]):null});
       else if(l.kind==='spread'&&l.line!=null)out.push({kind:'spread',tm,line:Number(l.line)});
       else if(l.kind==='total'&&l.line!=null)out.push({kind:'total',tm,line:Number(l.line),ou:l.ou==='under'?'under':'over'});
       else unknown.push(desc)}});
-  return {legsResolved:out,stake:moneyNum(data.stake),odds:data.odds?String(data.odds).trim():null,payout:moneyNum(data.payout),unknown}}
+  let stake=moneyNum(data.stake);const payout=moneyNum(data.payout),odds=data.odds?String(data.odds).trim():null;const D=odds?dec(odds):null;
+  if(payout&&D&&D>1){const e1=payout/D,e2=payout/(D-1);const near=(a,b)=>Math.abs(a-b)/b<0.2;if(!stake||!(near(stake,e1)||near(stake,e2)))stake=Math.round(e1*100)/100}
+  return {legsResolved:out,stake,odds,payout,unknown}}
 function buildScan(s){
   return {title:'Leyendo tu boleto',html:`<div class="scan"><div class="shot">${s.shotUrls&&s.shotUrls[0]?`<img src="${s.shotUrls[0]}" alt="Tu captura">`:''}</div>${s.shotUrls&&s.shotUrls.length>1?`<p><b>${s.shotUrls.length} capturas</b></p>`:''}<h3>${esc(s.scanMsg||'Leyendo selecciones…')}</h3><p>Empato cada selección con los partidos y jugadores de ESPN. Al terminar la revisas antes de guardar.</p></div>`,back:'bback'}}
 async function runScan(files){
@@ -1736,14 +1745,17 @@ async function runScan(files){
   const set=m=>{if(S.sheet===s&&s.view==='scan'){s.scanMsg=m;const h=$('.scan h3');if(h)h.textContent=m}};
   const n=files.length;
   try{
-    const ix=await scanIndex();
+    const games=await scanGames();
     set(n>1?`Leyendo ${n} capturas…`:'Leyendo selecciones…');
-    let res=null;const viaClaude=await readWithClaude(files,ix).catch(()=>null)||await readWithServer(files,ix);
-    if(viaClaude)res=resolveClaude(viaClaude,ix);
-    else res=await readWithOcr(files,ix,(i,p)=>set(n>1?`Leyendo captura ${i+1} de ${n}… ${Math.round(p*100)}%`:`Leyendo selecciones… ${Math.round(p*100)}%`));
+    let res=null;const viaClaude=await readWithClaude(files,{games}).catch(()=>null)||await readWithServer(files,{games});
+    if(viaClaude){set('Buscando partidos y jugadores…');const tix={teams:games.flatMap(g=>[{g,side:'away',t:g.away},{g,side:'home',t:g.home}])};const lg=viaClaude.legs||[];
+      const keys=lg.map(l=>l.team?idxTeam(tix,l.team):null);const all=lg.some((l,i)=>l.kind==='prop'&&!keys[i]);const ks=new Set(keys.filter(Boolean).map(x=>x.g.key));
+      const ix=await scanIndex(all?null:g=>ks.has(g.key));res=resolveClaude(viaClaude,ix)}
+    else{const ix=await scanIndex();res=await readWithOcr(files,ix,(i,p)=>set(n>1?`Leyendo captura ${i+1} de ${n}… ${Math.round(p*100)}%`:`Leyendo selecciones… ${Math.round(p*100)}%`));
+    }
     if(S.sheet!==s)return;
     let added=0;res.legsResolved.forEach(c=>{const q=legFromCand(c);if(!inDraft(q)){S.draft.legs.push({...q,id:uid()});added++}});
-    if(res.stake&&!S.draft.stake)S.draft.stake=String(res.stake);
+    if(res.stake)S.draft.stake=String(res.stake);
     if(res.odds&&dec(res.odds))S.draft.odds=res.odds;else if(res.payout&&res.stake)S.draft.odds=(res.payout/res.stake).toFixed(2);
     save();
     const rawBox=res.raw?`<details style="margin-top:8px"><summary>Ver lo que leí de la captura</summary><pre style="white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto;margin:8px 0 0">${esc(res.raw.trim())}</pre></details>`:'';
@@ -1934,7 +1946,7 @@ async function pushSubscribe(){if(!NT_SERVER||!ntOn()||!('serviceWorker' in navi
   if(S.pushSig===sig&&Date.now()-(S.pushAt||0)<6*36e5)return;
   const r=await fetch(NT_SERVER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body});if(r.ok){S.pushOK=true;S.pushSig=sig;S.pushAt=Date.now()}}
 function legShort(L){const kind=LG[L.lg]?.kind;const last=n=>String(n||'').split(' ').slice(-1)[0];
-  if(L.type==='prop'){const d=propDef(kind,L.market);const yn=L.line===0.5&&YESNO.has(L.market);return yn?`${last(L.athleteName)} · ${d?d[1]:''}`:`${last(L.athleteName)} ${L.ou==='over'?'+':'-'}${L.line} ${d?d[4]:''}`.trim()}
+  if(L.type==='prop'){const d=propDef(kind,L.market);const yn=L.line===0.5&&YESNO.has(L.market);return yn?`${last(L.athleteName)} · ${d?d[1]:''}`:`${last(L.athleteName)} ${Math.abs(L.line%1-0.5)<1e-9?(L.ou==='over'?Math.ceil(L.line)+'+':'≤'+Math.floor(L.line)):(L.ou==='over'?'+':'-')+L.line} ${d?d[4]:''}`.trim()}
   if(L.type==='ml')return L.side==='draw'?'Empate':`${L.teamAbbr||L.teamName} gana`;if(L.type==='spread')return `${L.teamAbbr||L.teamName} ${signed(L.line)}`;
   if(L.type==='total')return `Total ${L.ou==='over'?'+':'-'}${L.line} (${L.matchup})`;const t=legTitle(L);return t.length>34?t.slice(0,33)+'…':t}
 function propRecipe(kind,mk){const d=propDef(kind,mk);if(!d)return null;if(Array.isArray(d[2]))return {m:'pick',k:d[2]};if(mk==='dbl'||mk==='tpl'||mk==='outs')return {m:mk};const ks=[];const px=new Proxy({},{get:(t,k)=>{if(typeof k==='string')ks.push(k);return undefined}});try{d[2](px)}catch(e){}return {m:'sum',k:[...new Set(ks)]}}
