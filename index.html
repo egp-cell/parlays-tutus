@@ -1833,10 +1833,14 @@ const NT_SERVER='https://tutus-avisos.netlify.app';
 async function pushSubscribe(){if(!NT_SERVER||!ntOn()||!('serviceWorker' in navigator)||!('PushManager' in window))return;const reg=await navigator.serviceWorker.ready;
   let sub=await reg.pushManager.getSubscription();if(!sub){const vk=(await fetch(NT_SERVER+'/vapid').then(r=>r.json())).key;const b=vk.replace(/-/g,'+').replace(/_/g,'/');const k=Uint8Array.from(atob(b+'='.repeat((4-b.length%4)%4)),c=>c.charCodeAt(0));sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:k})}
   const items=S.favs.map(f=>({t:'team',lg:f.lg,id:f.id,p:S.ntp[ntKeyT(f.lg,f.id)]||ntDefaults(LG[f.lg].kind)})).concat(S.favGames.map(x=>({t:'game',lg:x.lg,k:x.k,p:S.ntp[ntKeyG(x.k)]||ntDefaults(LG[x.lg].kind)})));
-  const parlays=S.nt.parlay?S.parlays.filter(P=>!P.settled).map(P=>{const e=evalParlay(P);return {id:P.id,name:P.name||'Parlay',pay:e.payout,legs:P.legs.map(L=>({id:L.id,key:L.key,lg:L.lg,t:L.type,side:L.side||'',line:L.line??null,ou:L.ou||'',mk:L.market||'',ath:L.athleteId||'',an:L.athleteName||'',m:L.m||'',sel:L.sel||'',ti:legTitle(L),rc:L.type==='prop'?propRecipe(LG[L.lg].kind,L.market):null}))}}):[];
+  const parlays=S.nt.parlay?S.parlays.filter(P=>!P.settled).map(P=>{const e=evalParlay(P);return {id:P.id,name:P.name||'Parlay',pay:e.payout,legs:P.legs.map(L=>({id:L.id,key:L.key,lg:L.lg,t:L.type,side:L.side||'',line:L.line??null,ou:L.ou||'',mk:L.market||'',ath:L.athleteId||'',an:L.athleteName||'',m:L.m||'',sel:L.sel||'',ti:legTitle(L),sh:legShort(L),rc:L.type==='prop'?propRecipe(LG[L.lg].kind,L.market):null}))}}):[];
   const body=JSON.stringify({sub,items,parlays});const sig=body.length+':'+items.length+':'+parlays.map(P=>P.id+P.legs.length).join(',');
   if(S.pushSig===sig&&Date.now()-(S.pushAt||0)<6*36e5)return;
   const r=await fetch(NT_SERVER+'/subscribe',{method:'POST',headers:{'content-type':'application/json'},body});if(r.ok){S.pushOK=true;S.pushSig=sig;S.pushAt=Date.now()}}
+function legShort(L){const kind=LG[L.lg]?.kind;const last=n=>String(n||'').split(' ').slice(-1)[0];
+  if(L.type==='prop'){const d=propDef(kind,L.market);const yn=L.line===0.5&&YESNO.has(L.market);return yn?`${last(L.athleteName)} · ${d?d[1]:''}`:`${last(L.athleteName)} ${L.ou==='over'?'+':'-'}${L.line} ${d?d[4]:''}`.trim()}
+  if(L.type==='ml')return L.side==='draw'?'Empate':`${L.teamAbbr||L.teamName} gana`;if(L.type==='spread')return `${L.teamAbbr||L.teamName} ${signed(L.line)}`;
+  if(L.type==='total')return `Total ${L.ou==='over'?'+':'-'}${L.line} (${L.matchup})`;const t=legTitle(L);return t.length>34?t.slice(0,33)+'…':t}
 function propRecipe(kind,mk){const d=propDef(kind,mk);if(!d)return null;if(Array.isArray(d[2]))return {m:'pick',k:d[2]};if(mk==='dbl'||mk==='tpl'||mk==='outs')return {m:mk};const ks=[];const px=new Proxy({},{get:(t,k)=>{if(typeof k==='string')ks.push(k);return undefined}});try{d[2](px)}catch(e){}return {m:'sum',k:[...new Set(ks)]}}
 let ntSyncT;
 function ntSync(){clearTimeout(ntSyncT);ntSyncT=setTimeout(()=>pushSubscribe().catch(()=>{}),1500)}
