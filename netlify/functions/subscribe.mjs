@@ -21,7 +21,7 @@ export default async (req) => {
     id: str(P.id, 40), name: str(P.name, 60), pay: num(P.pay),
     legs: (Array.isArray(P.legs) ? P.legs : []).slice(0, 25).map(L => ({
       id: str(L.id, 40), key: str(L.key, 60), lg: str(L.lg, 20), t: str(L.t, 10), side: str(L.side, 6), line: num(L.line), ou: str(L.ou, 6),
-      mk: str(L.mk, 12), ath: str(L.ath, 20), an: str(L.an, 60), m: str(L.m, 8), sel: str(L.sel, 8), ti: str(L.ti, 90),
+      mk: str(L.mk, 12), ath: str(L.ath, 20), an: str(L.an, 60), m: str(L.m, 8), sel: str(L.sel, 8), ti: str(L.ti, 90), sh: str(L.sh, 50),
       rc: L.rc && typeof L.rc === 'object' ? { m: str(L.rc.m, 6), k: (Array.isArray(L.rc.k) ? L.rc.k : []).slice(0, 8).map(x => str(x, 30)) } : null
     }))
   }));

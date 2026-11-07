@@ -157,27 +157,27 @@ export default async () => {
       const id = s.key + '|' + P.id; const old = pst[id] || { legs: {}, sumAt: 0 }; const st = { legs: {}, sumAt: old.sumAt, done: old.done, sumSig: old.sumSig, liveAt: old.liveAt };
       const rs = P.legs.map(L => { const g = G[L.key]; const r = (LG[L.lg] && ['racing', 'golf'].includes(LG[L.lg][2])) ? { st: 'unknown' } : evalLeg(L, g, X[L.key] || {}); const o = old.legs[L.id] || {}; st.legs[L.id] = { st: r.st, near: o.near || (r.need === 1 ? 1 : 0), ht: g && /HALFTIME/.test(g.stn) ? 1 : 0 }; return { L, r, o, g }; });
       pnext[id] = st; if (old.done) continue; const first = !pst[id];
-      const lost = rs.filter(x => x.r.st === 'lost'), won = rs.filter(x => ['won', 'push'].includes(x.r.st));
-      const nm = '“' + P.name + '”';
+      const won = rs.filter(x => ['won', 'push'].includes(x.r.st));
+      const nm = P.name || 'Tu parlay', sh = x => x.L.sh || x.L.ti, val = x => typeof x.r.v === 'number' ? fmt(x.r.v) : '';
       if (first) continue; // la primera vez solo guardamos cómo va
-      // se cayó el parlay
+      // Una selección perdida = parlay caído: un solo aviso
       const newLost = rs.filter(x => x.r.st === 'lost' && x.o.st !== 'lost');
-      if (newLost.length && lost.length === newLost.length) { const x = newLost[0]; await send(s, '💔 Se cayó ' + nm, x.L.ti + '\n' + x.r.msg, P.id + ':end', ''); st.done = 1; continue; }
-      if (won.length === rs.length && rs.every(x => x.o.st)) { await send(s, '🎉 ¡Pegó ' + nm + '!', (P.pay ? 'Cobras ' + money(P.pay) + ' · ' : '') + rs.length + ' de ' + rs.length + ' selecciones', P.id + ':end', ''); st.done = 1; continue; }
+      if (newLost.length) { const x = newLost[0]; await send(s, '💔 Se cayó ' + nm, 'Por ' + sh(x) + (val(x) ? ' (quedó en ' + val(x) + ')' : ''), P.id + ':end', ''); st.done = 1; continue; }
+      if (won.length === rs.length && rs.every(x => x.o.st)) { await send(s, '🎉 ¡Pegó ' + nm + '!', P.pay ? 'Cobras ' + money(P.pay) : rs.length + ' de ' + rs.length + ' selecciones', P.id + ':end', ''); st.done = 1; continue; }
       for (const x of rs) {
-        if (['won', 'push'].includes(x.r.st) && !['won', 'push'].includes(x.o.st)) { const left = rs.length - won.length; await send(s, (x.r.st === 'push' ? '↩️ Se anuló una de ' : '✅ Cobró una de ') + nm, x.L.ti + '\n' + x.r.msg + (left ? (left === 1 ? ' · falta 1' : ' · faltan ' + left) : ''), P.id + ':' + x.L.id, x.L.key); }
-        else if (x.r.st === 'lost' && x.o.st !== 'lost') await send(s, '❌ Se cayó una de ' + nm, x.L.ti + '\n' + x.r.msg, P.id + ':' + x.L.id, x.L.key);
-        else if (x.r.need === 1 && !x.o.near && x.L.ou === 'over') await send(s, '🔥 A una de cobrar', x.L.ti + '\n' + x.r.msg, P.id + ':' + x.L.id + ':n', x.L.key);
+        if (['won', 'push'].includes(x.r.st) && !['won', 'push'].includes(x.o.st)) { const left = rs.length - won.length;
+          await send(s, (x.r.st === 'push' ? '↩️ ' : '✅ ') + sh(x), (x.r.st === 'push' ? 'Se anuló' : 'Cobró' + (val(x) ? ' con ' + val(x) : '')) + ' · ' + (left ? (left === 1 ? 'te falta 1' : 'te faltan ' + left) : nm), P.id + ':' + x.L.id, x.L.key); }
+        else if (x.r.need === 1 && !x.o.near && x.L.ou === 'over') await send(s, '🔥 A una: ' + sh(x), 'Lleva ' + val(x) + ' · ' + nm, P.id + ':' + x.L.id + ':n', x.L.key);
       }
-      // resumen: al medio tiempo de un partido del parlay, o cada 30 min mientras haya algo en vivo y cambie el pronóstico
+      // Resumen corto: al medio tiempo de un partido del parlay, o cada 30 min si cambió el pronóstico
       const live = rs.filter(x => ['live', 'ok', 'bad'].includes(x.r.st));
       if (live.length && !old.liveAt) { st.liveAt = now; st.sumSig = rs.filter(x => ['won', 'push', 'ok'].includes(x.r.st)).length + '/' + rs.filter(x => x.r.st === 'bad').length; }
       else if (live.length) {
-        const ok = rs.filter(x => ['won', 'push', 'ok'].includes(x.r.st)).length, bad = rs.filter(x => x.r.st === 'bad').length;
-        const sig = ok + '/' + bad; const ht = rs.some(x => st.legs[x.L.id].ht && !(x.o.ht));
+        const ok = rs.filter(x => ['won', 'push', 'ok'].includes(x.r.st)).length, badL = rs.filter(x => x.r.st === 'bad');
+        const sig = ok + '/' + badL.length; const ht = rs.some(x => st.legs[x.L.id].ht && !(x.o.ht));
         if (ht || (now - Math.max(old.sumAt || 0, old.liveAt || 0) > 30 * 60e3 && sig !== old.sumSig)) {
-          const lines = live.sort((a, b) => (a.r.st === 'bad' ? 0 : 1) - (b.r.st === 'bad' ? 0 : 1)).slice(0, 3).map(x => (x.r.st === 'bad' ? '⚠️ ' : x.r.st === 'ok' ? '✓ ' : '• ') + x.L.ti.replace(/ (más|menos) de /, ' $1 de ') + ': ' + x.r.msg);
-          await send(s, '📊 ' + nm + ': ' + ok + ' de ' + rs.length + ' en ruta', lines.join('\n'), P.id + ':sum', '');
+          const b = badL[0]; const line = b ? '⚠️ ' + sh(b) + (b.r.proj != null ? ' va para ' + fmt(b.r.proj < 10 ? Math.round(b.r.proj * 10) / 10 : Math.round(b.r.proj)) : ' va abajo') + (badL.length > 1 ? ' y ' + (badL.length - 1) + ' más' : '') : 'Todo va en ruta 👍';
+          await send(s, '📊 ' + nm + ' · ' + ok + '/' + rs.length + ' en ruta', line, P.id + ':sum', '');
           st.sumAt = now; st.sumSig = sig;
         }
       }
