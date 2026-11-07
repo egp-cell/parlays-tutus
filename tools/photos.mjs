@@ -20,7 +20,7 @@ const today = Math.floor(Date.now() / 864e5);
 
 let db = { v: 1, p: {}, t: {} };
 try { db = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
-db.p = db.p || {}; db.t = db.t || {}; db.f = db.f || {};
+db.p = db.p || {}; db.t = db.t || {}; db.f = db.f || {}; db.g = db.g || {};
 // Lo que ya encontraron los otros robots (o la corrida anterior) no se vuelve a buscar
 const known = {};
 for (const f of fs.readdirSync('.').filter(f => /^photos(-\d+)?\.json$/.test(f) && f !== FILE)) {
@@ -28,10 +28,11 @@ for (const f of fs.readdirSync('.').filter(f => /^photos(-\d+)?\.json$/.test(f) 
 }
 const hash = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
 
-async function getJSON(u, tries = 3) {
+const BROWSER = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36', 'Accept': 'application/json, text/plain, */*', 'Accept-Language': 'en-US,en;q=0.9' };
+async function getJSON(u, tries = 3, headers) {
   for (let i = 0; i < tries; i++) {
     try {
-      const r = await fetch(u, { headers: { 'User-Agent': 'tutus-score-photos' } });
+      const r = await fetch(u, { headers: headers || { 'User-Agent': 'tutus-score-photos' } });
       if (r.status === 429) { await sleep(65000); continue; }
       if (!r.ok) return null;
       return await r.json();
@@ -41,10 +42,10 @@ async function getJSON(u, tries = 3) {
 }
 // Segunda fuente gratis: FotMob (fotos uniformes de casi todos los futbolistas profesionales)
 async function fotmob(name, team) {
-  const j = await getJSON('https://www.fotmob.com/api/search/suggest?lang=en&term=' + encodeURIComponent(name), 2);
+  const j = await getJSON('https://www.fotmob.com/api/data/search/suggest?lang=en&term=' + encodeURIComponent(name), 2, BROWSER);
   if (!j) return null;
   const opts = [];
-  const add = (id, nm, tm) => { if (id) opts.push({ id: String(id), name: nm || '', team: tm || '' }); };
+  const add = (id, nm, tm) => { if (id && !opts.some(o => o.id === String(id))) opts.push({ id: String(id), name: nm || '', team: tm || '' }); };
   (Array.isArray(j) ? j : [j]).forEach(g => {
     (g.suggestions || []).forEach(x => { if (x.type === 'player') add(x.id, x.name, x.teamName); });
     (g.squadMemberSuggest || []).forEach(b => (b.options || []).forEach(o => add(o.payload?.id || String(o.text || '').split('|')[1], String(o.text || '').split('|')[0], o.payload?.teamName)));
@@ -52,7 +53,10 @@ async function fotmob(name, team) {
   if (!opts.length) return '';
   const tw = norm(team).split(' ').filter(w => w.length > 2), nw = norm(name).split(' ');
   const last = nw[nw.length - 1];
-  const pick = opts.find(o => tw.some(t => norm(o.team).includes(t)) && norm(o.name).includes(last)) || (opts.length === 1 && norm(opts[0].name).includes(last) ? opts[0] : null);
+  const full = norm(name), same = opts.filter(o => norm(o.name) === full);
+  const pick = opts.find(o => tw.some(t => norm(o.team).includes(t)) && norm(o.name).includes(last))
+    || (same.length === 1 ? same[0] : null)
+    || (opts.length === 1 && norm(opts[0].name).includes(last) ? opts[0] : null);
   return pick ? 'f' + pick.id : '';
 }
 // Guarda solo el nombre del archivo para que photos.json pese poco
@@ -88,13 +92,27 @@ for (const lg of LEAGUES) {
   console.log(`${lg}: ${teams.size} equipos · ${players.size} jugadores en total`);
 }
 
-// 2. Los que faltan
-const todo = [...players].filter(([id, p]) => hash(p.team) % SHARDS === SHARD && !known[id] && (!(id in db.p) || (db.p[id] === '' && today - (db.t[id] || 0) >= RETRY_DAYS)));
+// 2. Primero FotMob para TODOS (fotos de estudio recientes y uniformes); reemplaza las viejas de TheSportsDB
+let fm = 0, lastCommit = Date.now();
+for (const [id, p] of players) {
+  if (Date.now() - START > MAXMS) break;
+  if (hash(p.team) % SHARDS !== SHARD) continue;
+  if (String(db.p[id] || '').startsWith('f')) continue;
+  if (id in db.g && today - db.g[id] < RETRY_DAYS) continue;
+  const f = await fotmob(p.name, p.team); await sleep(900);
+  if (f === null) continue;            // FotMob no respondió: se intenta en la siguiente corrida
+  db.g[id] = today; if (f) { db.p[id] = f; db.t[id] = today; fm++; }
+  if (Date.now() - lastCommit > 15 * 60e3) { commit(`Fotos ${SHARD + 1}/${SHARDS}: +${fm} FotMob`); lastCommit = Date.now(); }
+}
+console.log(`FotMob: +${fm}`);
+
+// 3. Los que FotMob no encontró: TheSportsDB
+const todo = [...players].filter(([id, p]) => hash(p.team) % SHARDS === SHARD && !known[id] && !db.p[id] && (!(id in db.p) || (db.p[id] === '' && today - (db.t[id] || 0) >= RETRY_DAYS)));
 console.log(`Robot ${SHARD + 1} de ${SHARDS} · pendientes: ${todo.length} de ${players.size}`);
 const byTeam = new Map();
 todo.forEach(([id, p]) => { if (!byTeam.has(p.team)) byTeam.set(p.team, []); byTeam.get(p.team).push([id, p]); });
 
-let done = 0, lastCommit = Date.now();
+let done = 0;
 outer: for (const [team, list] of byTeam) {
   if (Date.now() - START > MAXMS) break;
   // Primero la plantilla del equipo de un jalón (la versión gratis trae hasta 10)
@@ -120,20 +138,9 @@ outer: for (const [team, list] of byTeam) {
       }
     }
     let code = enc(u);
-    if (!code) { const f = await fotmob(p.name, p.team); await sleep(1100); if (f) code = f; db.f[id] = today; }
     db.p[id] = code; db.t[id] = today; done++;
-    if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done}`); lastCommit = Date.now(); }
+    if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos ${SHARD + 1}/${SHARDS}: +${fm} FotMob +${done}`); lastCommit = Date.now(); }
   }
-}
-// 3. Los que ya se buscaron en TheSportsDB sin suerte: probar FotMob (más rápido, ~1 por segundo)
-let fm = 0;
-for (const [id, p] of players) {
-  if (Date.now() - START > MAXMS) break;
-  if (hash(p.team) % SHARDS !== SHARD || known[id] || db.p[id] !== '' || db.f[id]) continue;
-  const f = await fotmob(p.name, p.team); await sleep(1100);
-  if (f === null) continue;
-  db.f[id] = today; if (f) { db.p[id] = f; fm++; }
-  if (Date.now() - lastCommit > 20 * 60e3) { commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done} (+${fm} FotMob)`); lastCommit = Date.now(); }
 }
 commit(`Fotos ${SHARD + 1}/${SHARDS}: +${done} (+${fm} FotMob)`);
 const found = Object.values(db.p).filter(Boolean).length;
