@@ -838,6 +838,10 @@ button.bnr{width:100%;text-align:left}
 a.ri.pnew{text-decoration:none;color:inherit;grid-template-columns:minmax(0,1fr) auto}.pnew .n{white-space:normal;line-height:1.3;grid-column:1}.pnew .m{grid-column:1;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.pnew .r{grid-column:2;grid-row:1/3;color:var(--faint)}
 .leg .ft .pace{font-size:12px;font-weight:600;line-height:1.3;white-space:normal} .leg .ft .pace.ok{color:var(--win)} .leg .ft .pace.bad{color:#FFB020}
 .pfc{display:flex;flex-direction:column;gap:2px;margin:8px 14px 2px;padding:9px 12px;border-radius:12px;font-size:12.5px} .pfc b{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase} .pfc.ok{background:rgba(31,191,117,.1);color:var(--win)} .pfc.bad{background:rgba(255,176,32,.1);color:#FFB020} .pfc span{color:var(--fg);font-weight:600}
+.trk{position:relative} .trk .pj{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 4px,rgba(255,255,255,.05) 4px 8px)} .trk .pj.ok{background:repeating-linear-gradient(135deg,rgba(31,191,117,.38) 0 4px,rgba(31,191,117,.12) 4px 8px)} .trk .pj.bad{background:repeating-linear-gradient(135deg,rgba(255,176,32,.38) 0 4px,rgba(255,176,32,.12) 4px 8px)}
+.pjc{font-style:normal;margin-left:8px;font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:999px;white-space:nowrap;vertical-align:1px} .pjc.ok{background:rgba(31,191,117,.14);color:var(--win)} .pjc.bad{background:rgba(255,176,32,.14);color:#FFB020}
+.pfc2{display:flex;align-items:center;gap:8px;margin:6px 14px 0;padding:8px 10px;border-radius:10px;font-size:12.5px;background:var(--surface-2)} .pfc2 b{font-weight:800;white-space:nowrap} .pfc2.ok b{color:var(--win)} .pfc2.bad b{color:#FFB020} .pfc2>span:last-child{color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pfc2 .dots{display:flex;gap:3px;flex:none} .pfc2 .dots i{width:8px;height:8px;border-radius:50%;background:var(--surface-3)} .pfc2 .dots i.w{background:var(--win)} .pfc2 .dots i.ok{background:rgba(31,191,117,.55)} .pfc2 .dots i.bad{background:#FFB020}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
 
@@ -1312,16 +1316,18 @@ function legView(L,r,pid){
   if(L.type==='prop'||L.type==='total'||(L.type==='x'&&L.ou))val=r.v==null?`<span>${L.ou==='over'?'O':'U'} ${L.line}</span>`:`<b class="num">${typeof r.v==='number'?fmtNum(r.v):esc(r.v)}</b><span>/${L.line}</span>`;
   else if(r.v!=null)val=`<b class="num">${esc(r.v)}</b>`;
   else val=`<span>${L.type==='spread'?signed(L.line):''}</span>`;
-  const trk=r.prog!=null&&r.status!=='pending'&&r.status!=='push'?`<div class="trk"><i style="width:${Math.round(r.prog*100)}%"></i><u style="left:calc(${(r.mark*100).toFixed(1)}% - 1px)"></u></div>`:'';
+  const pjw=r.proj!=null&&r.prog!=null&&r.mark?Math.min(100,Math.round(r.proj/(L.line/r.mark)*100)):null;
+  const trk=r.prog!=null&&r.status!=='pending'&&r.status!=='push'?`<div class="trk">${pjw!=null?`<b class="pj ${r.pace}" style="width:${pjw}%"></b>`:''}<i style="width:${Math.round(r.prog*100)}%"></i><u style="left:calc(${(r.mark*100).toFixed(1)}% - 1px)"></u></div>`:'';
   return `<button class="leg st-${r.status} ${fresh?'flash':''}" data-a="openLeg" data-p="${pid||''}" data-l="${L.id}">
     <span class="ic">${legIcon(L)}${r.status==='won'?'<span class="ck">✓</span>':r.status==='lost'?'<span class="ck">✕</span>':''}</span>
     <div style="min-width:0"><div class="t">${esc(legTitle(L))}</div><div class="s">${esc(legSub(L))}</div></div>
     <div class="val">${fresh?`<span class="bump">+${fmtNum(b.n)}</span>`:''}${val}</div>${trk}
-    <div class="ft"><span class="msg">${esc(r.msg)}</span>${r.pmsg?`<span class="pace ${r.pace}">${r.pace==='ok'?'📈':'📉'} ${esc(r.pmsg)}</span>`:''}<span class="gm ${r.live?'lv':''}">${esc(r.status==='pending'?'':r.game)}</span></div>
+    <div class="ft"><span class="msg">${esc(r.msg)}${r.proj!=null?`<em class="pjc ${r.pace}" title="${esc(r.pmsg||'')}">${r.pace==='ok'?'↗':'↘'} va para ${fmtProj(r.proj)}</em>`:''}</span><span class="gm ${r.live?'lv':''}">${esc(r.status==='pending'?'':r.game)}</span></div>
     </button>`}
 function parlayForecast(e){if(e.status!=='live'||e.lost)return '';let ok=0,bad=0,unk=0;e.rs.forEach(r=>{if(r.status==='won'||r.status==='push'||r.status==='winning'||(r.status==='live'&&r.pace==='ok'))ok++;else if(r.status==='losing'||(r.status==='live'&&r.pace==='bad'))bad++;else unk++});
-  if(!ok&&!bad)return '';const txt=bad?`${bad} ${bad===1?'va':'van'} abajo del ritmo`:unk?`ninguna va mal · ${unk} sin ritmo todavía`:'si siguen así, pega ✓';
-  return `<div class="pfc ${bad?'bad':'ok'}"><b>Pronóstico al ritmo actual</b><span>${ok} de ${e.n} en ruta · ${esc(txt)}</span></div>`}
+  if(!ok&&!bad)return '';const txt=bad?`${bad} ${bad===1?'va':'van'} abajo del ritmo`:unk?'nada va mal por ahora':'si siguen así, pega';
+  const dots=e.rs.map(r=>{const c=r.status==='won'||r.status==='push'?'w':r.status==='winning'||(r.status==='live'&&r.pace==='ok')?'ok':r.status==='losing'||(r.status==='live'&&r.pace==='bad')?'bad':'na';return `<i class="${c}"></i>`}).join('');
+  return `<div class="pfc2 ${bad?'bad':'ok'}"><span class="dots">${dots}</span><b>${ok}/${e.n} en ruta</b><span>${esc(txt)}</span></div>`}
 function parlayCard(P,e){
   e=e||evalParlay(P);
   const cls=e.status==='lost'?'dead':e.status==='won'?'won':'';
