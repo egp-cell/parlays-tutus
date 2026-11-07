@@ -1560,21 +1560,35 @@ function legFromCand(c){
   if(c.kind==='spread')return {...legBase(g),type:'spread',...T,line:c.line};
   return {...legBase(g),type:'total',line:c.line,ou:c.ou}}
 function moneyNum(x){if(x==null)return null;const n=Number(String(x).replace(/[^\d.]/g,''));return n>0?n:null}
-async function readWithClaude(files,ix){
-  const sample=await claude?.use?.('sample');if(!sample)return null;const lim=await sample.limits().catch(()=>null);if(!lim?.images)return null;const imgs=files.slice(0,lim.images.maxCount||files.length);
+function ticketPrompt(ix){
   const games=ix.games.map(g=>`${LG[g.lg].name}: ${g.away.name} (${g.away.abbr}) @ ${g.home.name} (${g.home.abbr})`).join('\n');
   const mk=Object.entries(PROPS).map(([k,v])=>`${k}: ${v.map(x=>x[0]+'='+x[1]).join(', ')}`).join('\n');
-  const prompt=`Las imágenes son capturas de un mismo boleto de apuesta (parlay) de un casino en línea, en orden; puede venir partido en varias capturas. Extrae cada selección sin repetir.
+  return `Las imágenes son capturas de UN mismo boleto de apuesta (parlay/combinada) de un casino en línea (Caliente, Codere, Bet365, Playdoit, Strendus, DraftKings, FanDuel, etc.), en orden; puede venir partido en varias capturas. Léelo con cuidado, como lo leería una persona.
+Extrae cada selección UNA sola vez (si aparece repetida entre capturas, cuéntala una vez). No inventes selecciones: si algo no se ve claro, no lo pongas.
+Montos: "stake" es lo que se apostó (etiquetas como Apuesta, Monto, Importe, Total apostado, Stake, Wager, Apostar). "payout" es el pago total o ganancia potencial (Ganancia potencial, Pago potencial, Posibles ganancias, A cobrar, Premio, To win, Payout). Escribe solo el número, sin $ ni comas (ej. 250 o 1875.5). No confundas el momio con montos.
+"odds" es el momio total del boleto tal cual aparece (americano como +550 o decimal como 6.50); si solo aparecen momios por selección, deja null.
 Responde SOLO con JSON con esta forma:
-{"stake":número o null,"odds":"momio total del boleto tal cual aparece (americano como +550 o decimal como 6.50)" o null,"payout":número o null,
- "legs":[{"kind":"prop|ml|spread|total","player":"nombre completo del jugador o null","team":"equipo de esa selección o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate,"early":número de ventaja si la selección tiene pago anticipado o null}]}
-Reglas: "prop" es estadística de un jugador; "ml" es ganador; "spread" es hándicap (line con su signo); "total" es altas/bajas del partido (team = cualquiera de los dos equipos).
-"Anota TD" o "anota gol" en cualquier momento es prop con line 0.5 y ou "over".
+{"stake":número o null,"odds":"texto" o null,"payout":número o null,
+ "legs":[{"kind":"prop|ml|spread|total","player":"nombre completo del jugador o null","team":"equipo de esa selección (para prop, el equipo del jugador) o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate,"early":número de ventaja si dice pago anticipado o null}]}
+Reglas: "prop" es estadística de un jugador (ej. "LeBron James Más de 24.5 puntos" → kind prop, market pts, line 24.5, ou over). "ml" es ganador del partido / 1X2 / línea de dinero. "spread" es hándicap o línea de puntos/carreras/goles (line con su signo, ej. -3.5). "total" es altas/bajas/más-menos del partido completo (team = el equipo local de ese partido).
+"Más de / Over / Alta / O" = over; "Menos de / Under / Baja / U" = under. "Anota TD" o "anota gol" en cualquier momento es prop con line 0.5 y ou over. Un "18+ puntos" es line 17.5 over.
 Claves de mercado por deporte:
 ${mk}
-Partidos disponibles (usa estos nombres de equipo cuando apliquen):
-${games}`;
-  try{const data=await sample.json(prompt,{images:imgs,modelTier:'default'});return data}catch(e){if(e&&['not_granted','images_unavailable','unavailable'].includes(e.code))return null;throw e}}
+Partidos disponibles (usa exactamente estos nombres de equipo):
+${games}`}
+async function readWithClaude(files,ix){
+  const sample=await claude?.use?.('sample');if(!sample)return null;const lim=await sample.limits().catch(()=>null);if(!lim?.images)return null;const imgs=files.slice(0,lim.images.maxCount||files.length);
+  try{const data=await sample.json(ticketPrompt(ix),{images:imgs,modelTier:'default'});return data}catch(e){if(e&&['not_granted','images_unavailable','unavailable'].includes(e.code))return null;throw e}}
+async function shrinkImg(file){
+  try{const bmp=await createImageBitmap(file);const k=Math.min(1,1280/bmp.width);const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const url=c.toDataURL('image/jpeg',.88);return {type:'image/jpeg',data:url.split(',')[1]}}
+  catch(e){const url=await new Promise((r,j)=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=j;fr.readAsDataURL(file)});const m=String(url).match(/^data:([^;]+);base64,(.*)$/);return m?{type:m[1],data:m[2]}:null}}
+async function readWithServer(files,ix){
+  if(typeof NT_SERVER==='undefined'||!NT_SERVER)return null;
+  const images=(await Promise.all(files.slice(0,6).map(shrinkImg))).filter(Boolean);if(!images.length)return null;
+  const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),60000);
+  try{const r=await fetch(NT_SERVER+'/read',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({prompt:ticketPrompt(ix),images}),signal:ctl.signal});
+    if(!r.ok)return null;const j=await r.json();return j&&j.data&&Array.isArray(j.data.legs)?j.data:null}catch(e){return null}finally{clearTimeout(to)}}
 function loadScript(src){return new Promise((res,rej)=>{if(window.Tesseract)return res();const sc=document.createElement('script');sc.src=src;sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)})}
 async function prepImage(file){
   try{const bmp=await createImageBitmap(file);const k=Math.min(2.5,Math.max(1,2000/bmp.width));const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
@@ -1643,7 +1657,7 @@ async function runScan(files){
   try{
     const ix=await scanIndex();
     set(n>1?`Leyendo ${n} capturas…`:'Leyendo selecciones…');
-    let res=null;const viaClaude=await readWithClaude(files,ix).catch(()=>null);
+    let res=null;const viaClaude=await readWithClaude(files,ix).catch(()=>null)||await readWithServer(files,ix);
     if(viaClaude)res=resolveClaude(viaClaude,ix);
     else res=await readWithOcr(files,ix,(i,p)=>set(n>1?`Leyendo captura ${i+1} de ${n}… ${Math.round(p*100)}%`:`Leyendo selecciones… ${Math.round(p*100)}%`));
     if(S.sheet!==s)return;
