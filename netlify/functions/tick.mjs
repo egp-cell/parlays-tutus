@@ -158,7 +158,7 @@ export default async () => {
       const rs = P.legs.map(L => { const g = G[L.key]; const r = (LG[L.lg] && ['racing', 'golf'].includes(LG[L.lg][2])) ? { st: 'unknown' } : evalLeg(L, g, X[L.key] || {}); const o = old.legs[L.id] || {}; st.legs[L.id] = { st: r.st, near: o.near || (r.need === 1 ? 1 : 0), ht: g && /HALFTIME/.test(g.stn) ? 1 : 0 }; return { L, r, o, g }; });
       pnext[id] = st; if (old.done) continue; const first = !pst[id];
       const won = rs.filter(x => ['won', 'push'].includes(x.r.st));
-      const nm = P.name || 'Tu parlay', sh = x => x.L.sh || x.L.ti, val = x => typeof x.r.v === 'number' ? fmt(x.r.v) : '';
+      const nm = P.name || 'Tu parlay', sh = x => x.L.sh || (x.L.t === 'prop' && x.L.an ? x.L.an.split(' ').slice(-1)[0] + ' ' + (x.L.ou === 'over' ? '+' : '-') + x.L.line + ' ' + (x.L.mk || '') : x.L.ti), val = x => typeof x.r.v === 'number' ? fmt(x.r.v) : '';
       if (first) continue; // la primera vez solo guardamos cómo va
       // Una selección perdida = parlay caído: un solo aviso
       const newLost = rs.filter(x => x.r.st === 'lost' && x.o.st !== 'lost');
@@ -176,8 +176,14 @@ export default async () => {
         const ok = rs.filter(x => ['won', 'push', 'ok'].includes(x.r.st)).length, badL = rs.filter(x => x.r.st === 'bad');
         const sig = ok + '/' + badL.length; const ht = rs.some(x => st.legs[x.L.id].ht && !(x.o.ht));
         if (ht || (now - Math.max(old.sumAt || 0, old.liveAt || 0) > 30 * 60e3 && sig !== old.sumSig)) {
-          const b = badL[0]; const line = b ? '⚠️ ' + sh(b) + (b.r.proj != null ? ' va para ' + fmt(b.r.proj < 10 ? Math.round(b.r.proj * 10) / 10 : Math.round(b.r.proj)) : ' va abajo') + (badL.length > 1 ? ' y ' + (badL.length - 1) + ' más' : '') : 'Todo va en ruta 👍';
-          await send(s, '📊 ' + nm + ' · ' + ok + '/' + rs.length + ' en ruta', line, P.id + ':sum', '');
+          const pj = x => fmt(x.r.proj < 10 ? Math.round(x.r.proj * 10) / 10 : Math.round(x.r.proj));
+          const needTxt = L => L.ou === 'over' ? 'necesita ' + (Math.floor(L.line) + 1) : 'máximo ' + (Math.ceil(L.line) - 1);
+          let body;
+          if (badL.length) { const b0 = badL[0];
+            body = '⚠️ ' + sh(b0) + '\n' + (b0.r.proj != null ? 'Lleva ' + val(b0) + ', al ritmo acaba con ' + pj(b0) + ' y ' + needTxt(b0.L) : b0.r.msg);
+            if (badL.length > 1) body += '\n' + (badL.length === 2 ? 'Otra selección también va abajo' : 'Otras ' + (badL.length - 1) + ' también van abajo'); }
+          else body = 'Todo va en ruta 👍';
+          await send(s, '📊 ' + nm + ': ' + ok + ' de ' + rs.length + (ok === 1 ? ' va bien' : ' van bien'), body, P.id + ':sum', '');
           st.sumAt = now; st.sumSig = sig;
         }
       }
