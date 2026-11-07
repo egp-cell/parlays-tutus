@@ -605,6 +605,7 @@ main::-webkit-scrollbar{display:none}
 .godd b{color:var(--muted);font-weight:700} .godd i{font-style:normal}
 .gsc b.ml{font-size:12.5px;font-weight:700;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:0 7px;line-height:22px;margin:2px 0;min-width:44px;text-align:center}
 .fgs{font-style:normal;color:#FFB020;font-size:11px}
+.mseg{display:flex;overflow-x:auto;scrollbar-width:none;margin:4px 0 6px}.mseg::-webkit-scrollbar{display:none}.mseg button{flex:0 0 auto;white-space:nowrap}
 .gstat .gck{display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1}
 .gstat .gck b{font-size:13px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
 .gstat .gck small{font-size:10.5px;font-weight:700;opacity:.8;white-space:nowrap}
@@ -1133,6 +1134,25 @@ function ouR(r,v,L,end,unit){r.v=v;const max=Math.max(L.line*1.25,v,1);r.prog=Ma
 function sideR(r,d,end,txt){r.status=end?(d>0?'won':d<0?'lost':'push'):(d>0?'winning':d<0?'losing':'even');r.msg=txt;return r}
 const f1SesOf=(g,re)=>(g.raw.competitions||[]).find(c=>re.test((c.type&&c.type.abbreviation)||''));
 const F1RE={f1w:/^Race$/,f1t:/^Race$/,f1h:/^Race$/,f1p:/^Qual$/,f1s:/^(SR|Sprint|SS)$/};
+function xCore(L,g,kind,fin){const hs=g.home.score,as=g.away.score,tot=hs+as,sc=as+'-'+hs;const W=(ok,dead)=>fin?(ok?'won':'lost'):dead?'lost':(ok?'winning':'losing');
+  const hl=g.home.ls||[],al=g.away.ls||[];const sum=(x,a,b)=>x.slice(a,b).reduce((p,c)=>p+(Number(c)||0),0);
+  const resOk=s=>s==='h'?hs>as:s==='a'?as>hs:hs===as;
+  switch(L.m){
+    case 'rt':{const r=resOk(L.sel),t=L.ou==='over'?tot>L.line:tot<L.line;const dead=L.ou==='under'&&tot>L.line;return {st:W(r&&t,dead),msg:`Va ${sc} · ${tot} ${kind==='soccer'?'goles':'en total'}`,v:sc}}
+    case 'rb':{const [rs,bt]=String(L.sel).split('|');const r=resOk(rs),b=hs>0&&as>0;const t=bt==='y'?b:!b;const dead=bt==='n'&&b;return {st:W(r&&t,dead),msg:`Va ${sc}`,v:sc}}
+    case 'dnb':{const d=L.sel==='h'?hs-as:as-hs;return {st:fin?(d>0?'won':d<0?'lost':'push'):(d>0?'winning':d<0?'losing':'even'),msg:d===0?(fin?'Empate · se anula':'Empatados · se anularía'):`Va ${sc}`,v:sc}}
+    case 'wtn':{const me=L.sel==='h'?hs:as,op=L.sel==='h'?as:hs;return {st:W(me>op&&op===0,op>0),msg:op>0?'Ya le anotaron':`Va ${sc}`,v:sc}}
+    case 'cs':{const op=L.sel==='h'?as:hs;return {st:W(op===0,op>0),msg:op>0?'Ya le anotaron':'Portería en cero',v:sc}}
+    case 'exs':{const [h,a]=String(L.sel).split('-').map(Number);const ok=hs===h&&as===a;return {st:W(ok,hs>h||as>a),msg:hs>h||as>a?'Ya no se puede dar':`Va ${sc}`,v:sc}}
+    case 'oe':{const ok=(tot%2===1)===(L.sel==='o');return {st:W(ok,false),msg:`${tot} en total`,v:String(tot)}}
+    case 'nrfi':{const a=al[0],h=hl[0];const r=(Number(a)||0)+(Number(h)||0);const done=fin||hl.length>1||al.length>1||(h!=null&&g.period>1);const ok=L.sel==='y'?r>0:r===0;
+      if(L.sel==='y'&&r>0)return {st:'won',msg:'Hubo carrera en la 1ª',v:String(r)};if(L.sel==='n'&&r>0)return {st:'lost',msg:'Hubo carrera en la 1ª',v:String(r)};
+      return {st:done?(ok?'won':'lost'):(ok?'winning':'losing'),msg:done?'Sin carreras en la 1ª':'1ª entrada en juego',v:String(r)}}
+    case 'reg':{const N=3;const done=fin||hl.length>N||al.length>N;const h=sum(hl,0,N),a=sum(al,0,N);const ok=L.sel==='h'?h>a:L.sel==='a'?a>h:h===a;return {st:done?(ok?'won':'lost'):(ok?'winning':'losing'),msg:`Tiempo regular: ${a}-${h}`,v:`${a}-${h}`}}
+    case 'h2':case 'h2t':{const N=(typeof H1N!=='undefined'?H1N:{soccer:1,basketball:2,football:2,hockey:1,baseball:5})[kind]||1;const started=hl.length>N||al.length>N||(kind==='soccer'&&(g.period>=2||/2nd|second|2º|segundo/i.test(g.detail||g.det||'')));const h=started?sum(hl,N):0,a=started?sum(al,N):0;
+      if(L.m==='h2t')return {ou:h+a,done:fin,pre:!started};const ok=L.sel==='h'?h>a:L.sel==='a'?a>h:h===a;return {st:fin?(ok?'won':'lost'):!started?'pending':(ok?'winning':'losing'),msg:started?`2ª mitad: ${a}-${h}`:'Empieza en la 2ª mitad',v:`${a}-${h}`}}
+    case 'q1':case 'q1t':{const done=fin||hl.length>1||al.length>1;const h=Number(hl[0])||0,a=Number(al[0])||0;if(L.m==='q1t')return {ou:h+a,done};const ok=L.sel==='h'?h>a:L.sel==='a'?a>h:h===a;return {st:done?(ok?'won':'lost'):(ok?'winning':'losing'),msg:`1er ${kind==='hockey'?'periodo':'cuarto'}: ${a}-${h}`,v:`${a}-${h}`}}
+  }return null}
 function evalX(L,r,ev,g,kind,fin){
   if(kind==='racing'){const c=f1SesOf(g,F1RE[L.m]);if(!c){r.status='pending';r.msg='Sesión por confirmar';return r}
     const cs=c.status&&c.status.type&&c.status.type.state;if(cs==='pre'){r.status='pending';r.live=false;r.msg=`Empieza ${dshort(c.date)} ${hhmm(c.date)}`;return r}
@@ -1163,31 +1183,63 @@ function evalX(L,r,ev,g,kind,fin){
     case 'h1':case 'h1t':{const N=H1N[kind]||1;const a=g.away.ls||[],h=g.home.ls||[];const sm=x=>x.slice(0,N).reduce((p,c)=>p+(Number(c)||0),0);const done=fin||a.length>N||h.length>N||(kind==='soccer'&&/medio tiempo|half/i.test(g.detail));const av=sm(a),hv=sm(h);
       if(L.m==='h1t')return ouR(r,av+hv,L,done);
       r.v=`${av}-${hv}`;const ok=L.sel==='h'?hv>av:L.sel==='a'?av>hv:av===hv;r.status=done?(ok?'won':'lost'):(ok?'winning':'losing');r.msg=done?(ok?'Cobró':'No se dio'):`${H1L[kind]}: ${g.away.abbr} ${av}-${hv} ${g.home.abbr}`;return r}}
+  const xc=xCore(L,g,kind,fin);if(xc){if(xc.ou!=null){if(xc.pre){r.status='pending';r.msg='Empieza en la 2ª mitad';return r}return ouR(r,xc.ou,L,xc.done)}r.status=xc.st;r.msg=fin?xc.msg.replace(/^Va /,'Quedó '):xc.msg;r.v=xc.v;return r}
   r.msg='Mercado no reconocido';return r}
+const xWho=(L,s)=>s==='h'?L.hAbbr:s==='a'?L.aAbbr:'Empate';const Q1N=k=>k==='hockey'?'periodo':'cuarto';
 function xTitle(L){const kind=LG[L.lg]?.kind;const tn=L.teamName||L.teamAbbr||'';const ou=L.ou==='over'?'Más':'Menos';
   switch(L.m){case 'dc':return {hX:`${L.hAbbr} o empate`,aX:`${L.aAbbr} o empate`,ha:'Sin empate (gana cualquiera)'}[L.sel];case 'btts':return `Ambos anotan: ${L.sel==='y'?'Sí':'No'}`;
     case 'tt':return `${tn}: ${ou.toLowerCase()} de ${L.line}`;case 'corn':return `${ou} de ${L.line} tiros de esquina`;case 'card':return `${ou} de ${L.line} tarjetas`;
     case 'h1':return L.sel==='d'?`Empate al ${H1L[kind]}`:`${L.sel==='h'?L.hAbbr:L.aAbbr} gana ${kind==='baseball'?'las':'el'} ${H1L[kind]}`.replace('el 1ª','la 1ª');case 'h1t':return `${ou} de ${L.line} · ${H1L[kind]}`;
     case 'tg':return `${ou} de ${L.line} games`;case 'ts':return `${ou} de ${L.line} sets`;case 'tgs':return `${tn} ${signed(L.line)} games`;case 's1':return `${tn} gana el 1er set`;case 'w1s':return `${tn} gana al menos un set`;case 'tcs':return `${tn} gana ${L.sel}`;
     case 'f1w':return `${L.athName} gana`;case 'f1t':return L.n===3?`${L.athName} en el podio`:`${L.athName} top ${L.n}`;case 'f1p':return `${L.athName} hace la pole`;case 'f1s':return `${L.athName} gana el sprint`;case 'f1h':return `${L.athName} le gana a ${L.ath2Name}`;
+    case 'rt':return `${xWho(L,L.sel)} y ${ou.toLowerCase()} de ${L.line}`;case 'rb':{const [a,b]=String(L.sel).split('|');return `${xWho(L,a)} y ambos anotan: ${b==='y'?'Sí':'No'}`}
+    case 'dnb':return `${xWho(L,L.sel)} · empate no apuesta`;case 'wtn':return `${xWho(L,L.sel)} gana sin recibir gol`;case 'cs':return `${xWho(L,L.sel)}: portería en cero`;
+    case 'exs':{const [h,a]=String(L.sel).split('-');return `Marcador ${L.aAbbr} ${a}-${h} ${L.hAbbr}`}case 'oe':return `Total ${L.sel==='o'?'non':'par'}`;
+    case 'nrfi':return L.sel==='n'?'Sin carreras en la 1ª entrada':'Hay carrera en la 1ª entrada';case 'reg':return L.sel==='d'?'Empate en tiempo regular':`${xWho(L,L.sel)} gana en tiempo regular`;
+    case 'h2':return L.sel==='d'?'Empate en la 2ª mitad':`${xWho(L,L.sel)} gana la 2ª mitad`;case 'h2t':return `${ou} de ${L.line} · 2ª mitad`;
+    case 'q1':return L.sel==='d'?`Empate en el 1er ${Q1N(kind)}`:`${xWho(L,L.sel)} gana el 1er ${Q1N(kind)}`;case 'q1t':return `${ou} de ${L.line} · 1er ${Q1N(kind)}`;
     case 'gw':return `${L.athName} gana el torneo`;case 'gt':return `${L.athName} top ${L.n}`;case 'gc':return `${L.athName} ${L.sel==='y'?'pasa':'no pasa'} el corte`;case 'gh':return `${L.athName} le gana a ${L.ath2Name}`}return 'Selección'}
-function xSub(L){const kind=LG[L.lg]?.kind;const G={dc:'Doble oportunidad',btts:'Ambos anotan',tt:'Total del equipo',corn:'Tiros de esquina',card:'Tarjetas',h1:'Ganador '+(H1L[kind]||''),h1t:'Total '+(H1L[kind]||''),tg:'Total de games',ts:'Total de sets',tgs:'Hándicap de games',s1:'1er set',w1s:'Gana un set',tcs:'Resultado exacto',f1w:'Carrera',f1t:'Carrera',f1p:'Clasificación',f1s:'Sprint',f1h:'Duelo en carrera',gw:'Ganador',gt:'Top '+(L.n||''),gc:'Corte',gh:'Duelo'};return `${G[L.m]||''} · ${L.matchup}`}
+function xSub(L){const kind=LG[L.lg]?.kind;const G={dc:'Doble oportunidad',btts:'Ambos anotan',tt:'Total del equipo',corn:'Tiros de esquina',card:'Tarjetas',h1:'Ganador '+(H1L[kind]||''),h1t:'Total '+(H1L[kind]||''),tg:'Total de games',ts:'Total de sets',tgs:'Hándicap de games',s1:'1er set',w1s:'Gana un set',tcs:'Resultado exacto',rt:'Resultado y total',rb:'Resultado y ambos anotan',dnb:'Empate no apuesta',wtn:'Gana sin recibir gol',cs:'Portería en cero',exs:'Marcador exacto',oe:'Par o non',nrfi:'1ª entrada',reg:'Tiempo regular',h2:'Ganador 2ª mitad',h2t:'Total 2ª mitad',q1:'1er '+Q1N(kind),q1t:'Total 1er '+Q1N(kind),f1w:'Carrera',f1t:'Carrera',f1p:'Clasificación',f1s:'Sprint',f1h:'Duelo en carrera',gw:'Ganador',gt:'Top '+(L.n||''),gc:'Corte',gh:'Duelo'};return `${G[L.m]||''} · ${L.matchup}`}
 /* constructor de opciones */
 const optBtn=(q,label,sub)=>`<button class="opt" data-a="toggleLeg" data-q="${qAttr(q)}" aria-pressed="${!!inDraft(q)}"><b>${label}</b>${inDraft(q)?'<small>✓ En tu parlay</small>':sub?`<small>${sub}</small>`:''}</button>`;
 const optRow=(n,items)=>`<div class="opts" style="--n:${n}">${items.join('')}</div>`;
 function ouBlock(s,name,lab,def,mk){const ln=lnv(s,name,def);const Ov=mk({line:ln,ou:'over'}),Un=mk({line:ln,ou:'under'});return `<span class="flabel">${lab}</span>${lineInput(name,ln)}${optRow(2,[optBtn(Ov,'Más de '+ln),optBtn(Un,'Menos de '+ln)])}`}
-function teamMore(s,g,kind,base){const X=o=>({...base,type:'x',hAbbr:g.home.abbr,aAbbr:g.away.abbr,...o});let h='';
-  if(kind==='soccer'){
-    h+=`<span class="flabel">Doble oportunidad</span>`+optRow(3,[optBtn(X({m:'dc',sel:'hX'}),`${esc(g.home.abbr)} o empate`),optBtn(X({m:'dc',sel:'ha'}),'Sin empate'),optBtn(X({m:'dc',sel:'aX'}),`${esc(g.away.abbr)} o empate`)]);
-    h+=`<span class="flabel">Ambos anotan</span>`+optRow(2,[optBtn(X({m:'btts',sel:'y'}),'Sí'),optBtn(X({m:'btts',sel:'n'}),'No')]);
-    h+=`<span class="flabel">Resultado al medio tiempo</span>`+optRow(3,[optBtn(X({m:'h1',sel:'h'}),esc(g.home.abbr)),optBtn(X({m:'h1',sel:'d'}),'Empate'),optBtn(X({m:'h1',sel:'a'}),esc(g.away.abbr))]);
-    h+=ouBlock(s,'h1t','Goles del 1er tiempo',1.5,o=>X({m:'h1t',...o}));
-    h+=ouBlock(s,'corn','Tiros de esquina (los dos equipos)',9.5,o=>X({m:'corn',...o}));
-    h+=ouBlock(s,'card','Tarjetas (los dos equipos)',4.5,o=>X({m:'card',...o}))}
-  else{h+=`<span class="flabel">Ganador ${kind==='baseball'?'de las':'del'} ${H1L[kind]}</span>`+optRow(2,[optBtn(X({m:'h1',sel:'a'}),esc(g.away.abbr)),optBtn(X({m:'h1',sel:'h'}),esc(g.home.abbr))]);
-    h+=ouBlock(s,'h1t','Total '+H1L[kind],{basketball:112.5,football:22.5,hockey:1.5,baseball:4.5}[kind],o=>X({m:'h1t',...o}))}
-  const td={soccer:1.5,basketball:112.5,football:22.5,hockey:2.5,baseball:4.5}[kind];
-  [['away',g.away],['home',g.home]].forEach(([sd,t])=>{h+=ouBlock(s,'tt'+sd,`Total de ${esc(t.name)}`,td,o=>X({m:'tt',side:sd,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamLogo:t.logo,...o}))});
+function teamMore(s,g,kind,base){const X=o=>({...base,type:'x',hAbbr:g.home.abbr,aAbbr:g.away.abbr,...o});const H=esc(g.home.abbr),A=esc(g.away.abbr);
+  const soc=kind==='soccer';const od=g.odds||{};
+  const groups=soc?[['comb','Combinadas'],['res','Resultado'],['gol','Goles'],['mitad','Por tiempo'],['ct','Corners y tarjetas']]:[['comb','Combinadas'],['res','Resultado'],['mitad',kind==='baseball'?'Entradas':'Por periodo'],['pts',kind==='baseball'?'Carreras':kind==='hockey'?'Goles':'Puntos']];
+  const mt=groups.some(x=>x[0]===s.mtab)?s.mtab:groups[0][0];
+  let h=`<div class="seg mseg">${groups.map(([k,t])=>`<button data-a="mtab" data-v="${k}" aria-pressed="${mt===k}">${t}</button>`).join('')}</div>`;
+  const R3=soc?[['a',A],['d','Empate'],['h',H]]:[['a',A],['h',H]];
+  if(mt==='comb'){const tl=lnv(s,'rt',soc?2.5:(od.total??{basketball:220.5,football:44.5,hockey:5.5,baseball:8.5}[kind]));
+    h+=`<span class="flabel">Resultado y total ${soc?'de goles':'del partido'}</span>${lineInput('rt',tl)}`+optRow(2,R3.flatMap(([k,n])=>[optBtn(X({m:'rt',sel:k,line:tl,ou:'over'}),`${n} y más de ${tl}`),optBtn(X({m:'rt',sel:k,line:tl,ou:'under'}),`${n} y menos de ${tl}`)]));
+    if(soc)h+=`<span class="flabel">Resultado y ambos anotan</span>`+optRow(2,R3.flatMap(([k,n])=>[optBtn(X({m:'rb',sel:k+'|y'}),`${n} y ambos anotan`),optBtn(X({m:'rb',sel:k+'|n'}),`${n} y no anotan los dos`)]))}
+  else if(mt==='res'){
+    if(soc){h+=`<span class="flabel">Doble oportunidad</span>`+optRow(3,[optBtn(X({m:'dc',sel:'aX'}),`${A} o empate`),optBtn(X({m:'dc',sel:'ha'}),'Sin empate'),optBtn(X({m:'dc',sel:'hX'}),`${H} o empate`)]);
+      h+=`<span class="flabel">Empate no apuesta</span>`+optRow(2,[optBtn(X({m:'dnb',sel:'a'}),A,'Si empatan se anula'),optBtn(X({m:'dnb',sel:'h'}),H,'Si empatan se anula')]);
+      h+=`<span class="flabel">Gana sin recibir gol</span>`+optRow(2,[optBtn(X({m:'wtn',sel:'a'}),A),optBtn(X({m:'wtn',sel:'h'}),H)]);
+      h+=`<span class="flabel">Portería en cero</span>`+optRow(2,[optBtn(X({m:'cs',sel:'a'}),A),optBtn(X({m:'cs',sel:'h'}),H)]);
+      const sc=(arr,lab)=>`<span class="flabel">Marcador exacto · ${lab}</span>`+optRow(4,arr.map(x=>{const [hh,aa]=x.split('-');return optBtn(X({m:'exs',sel:x}),`${aa}-${hh}`)}));
+      h+=sc(['1-0','2-0','2-1','3-0','3-1','3-2','4-0','4-1'],`gana ${H} (${A}-${H})`)+sc(['0-0','1-1','2-2','3-3'],'empate')+sc(['0-1','0-2','1-2','0-3','1-3','2-3','0-4','1-4'],`gana ${A} (${A}-${H})`)}
+    else{if(kind==='hockey')h+=`<span class="flabel">Ganador en tiempo regular (sin tiempo extra)</span>`+optRow(3,[optBtn(X({m:'reg',sel:'a'}),A),optBtn(X({m:'reg',sel:'d'}),'Empate'),optBtn(X({m:'reg',sel:'h'}),H)]);
+      if(kind==='baseball')h+=`<span class="flabel">1ª entrada</span>`+optRow(2,[optBtn(X({m:'nrfi',sel:'n'}),'Sin carreras','NRFI'),optBtn(X({m:'nrfi',sel:'y'}),'Hay carrera','YRFI')]);
+      h+=`<span class="flabel">Par o non (total del partido)</span>`+optRow(2,[optBtn(X({m:'oe',sel:'o'}),'Non'),optBtn(X({m:'oe',sel:'e'}),'Par')])}}
+  else if(mt==='gol'){h+=`<span class="flabel">Ambos anotan</span>`+optRow(2,[optBtn(X({m:'btts',sel:'y'}),'Sí'),optBtn(X({m:'btts',sel:'n'}),'No')]);
+    [['away',g.away],['home',g.home]].forEach(([sd,t])=>{h+=ouBlock(s,'tt'+sd,`Goles de ${esc(t.name)}`,1.5,o=>X({m:'tt',side:sd,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamLogo:t.logo,...o}))});
+    h+=`<span class="flabel">Goles: par o non</span>`+optRow(2,[optBtn(X({m:'oe',sel:'o'}),'Non'),optBtn(X({m:'oe',sel:'e'}),'Par')])}
+  else if(mt==='mitad'){
+    if(soc){h+=`<span class="flabel">Resultado al medio tiempo</span>`+optRow(3,[optBtn(X({m:'h1',sel:'a'}),A),optBtn(X({m:'h1',sel:'d'}),'Empate'),optBtn(X({m:'h1',sel:'h'}),H)]);
+      h+=ouBlock(s,'h1t','Goles del 1er tiempo',1.5,o=>X({m:'h1t',...o}));
+      h+=`<span class="flabel">Resultado del 2º tiempo</span>`+optRow(3,[optBtn(X({m:'h2',sel:'a'}),A),optBtn(X({m:'h2',sel:'d'}),'Empate'),optBtn(X({m:'h2',sel:'h'}),H)]);
+      h+=ouBlock(s,'h2t','Goles del 2º tiempo',1.5,o=>X({m:'h2t',...o}))}
+    else{h+=`<span class="flabel">Ganador ${kind==='baseball'?'de las':kind==='basketball'||kind==='football'?'de la':'del'} ${H1L[kind]}</span>`+optRow(2,[optBtn(X({m:'h1',sel:'a'}),A),optBtn(X({m:'h1',sel:'h'}),H)]);
+      h+=ouBlock(s,'h1t','Total '+H1L[kind],{basketball:112.5,football:22.5,hockey:1.5,baseball:4.5}[kind],o=>X({m:'h1t',...o}));
+      if(kind==='basketball'||kind==='football'){h+=`<span class="flabel">Ganador de la 2ª mitad</span>`+optRow(2,[optBtn(X({m:'h2',sel:'a'}),A),optBtn(X({m:'h2',sel:'h'}),H)]);
+        h+=ouBlock(s,'h2t','Total 2ª mitad',{basketball:110.5,football:21.5}[kind],o=>X({m:'h2t',...o}))}
+      if(kind!=='baseball'){h+=`<span class="flabel">Ganador del 1er ${Q1N(kind)}</span>`+optRow(kind==='hockey'?3:2,[optBtn(X({m:'q1',sel:'a'}),A),...(kind==='hockey'?[optBtn(X({m:'q1',sel:'d'}),'Empate')]:[]),optBtn(X({m:'q1',sel:'h'}),H)]);
+        h+=ouBlock(s,'q1t','Total 1er '+Q1N(kind),{basketball:55.5,football:9.5,hockey:1.5}[kind],o=>X({m:'q1t',...o}))}}}
+  else if(mt==='ct'){h+=ouBlock(s,'corn','Tiros de esquina (los dos equipos)',9.5,o=>X({m:'corn',...o}));h+=ouBlock(s,'card','Tarjetas (los dos equipos)',4.5,o=>X({m:'card',...o}))}
+  else if(mt==='pts'){const td={basketball:112.5,football:22.5,hockey:2.5,baseball:4.5}[kind];
+    [['away',g.away],['home',g.home]].forEach(([sd,t])=>{h+=ouBlock(s,'tt'+sd,`Total de ${esc(t.name)}`,td,o=>X({m:'tt',side:sd,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamLogo:t.logo,...o}))})}
   return h}
 function tennisTabs(s,g,base){const bo=bestOf(g);const T=(sd)=>{const p=g[sd];return {side:sd,teamAbbr:p.abbr,teamName:p.full,teamLogo:p.flag,teamHead:p.head,teamColor:p.color}};const X=o=>({...base,type:'x',...o});let h='';
   if(s.gtab==='sets'){const hl=bo===5?2.5:1.5;
@@ -1575,6 +1627,7 @@ function idxTeam(ix,name){const t=norm(name).trim();if(!t)return null;
   return ix.teams.find(x=>norm(x.t.abbr)===t)||ix.teams.find(x=>{const nm=norm(x.t.name);return nm&&(nm===t||(nm.length>=4&&t.includes(nm))||(t.length>=4&&nm.includes(t)))})||null}
 function legFromCand(c){
   if(c.kind==='prop'){const p=c.p,g=p.g;return {...legBase(g),type:'prop',athleteId:p.id,athleteName:p.name,head:p.head,side:p.side,teamAbbr:p.t.abbr,teamColor:p.t.color,teamAlt:p.t.alt,teamLogo:p.t.logo,market:c.market,line:c.line,ou:c.ou}}
+  if(c.kind==='x'){const g=c.tm.g;return {...legBase(g),type:'x',hAbbr:g.home.abbr,aAbbr:g.away.abbr,...c.x}}
   const{g,side,t}=c.tm;const T={side,teamAbbr:t.abbr,teamName:t.name,teamColor:t.color,teamAlt:t.alt,teamLogo:t.logo};
   if(c.kind==='ml')return c.draw?{...legBase(g),type:'ml',side:'draw',teamAbbr:'X',teamName:'Empate'}:{...legBase(g),type:'ml',...T,...(c.early?{early:c.early}:{})};
   if(c.kind==='spread')return {...legBase(g),type:'spread',...T,line:c.line};
@@ -1589,7 +1642,8 @@ Montos: "stake" es lo que se apostó (etiquetas como Apuesta, Monto, Importe, To
 "odds" es el momio total del boleto tal cual aparece (americano como +550 o decimal como 6.50); si solo aparecen momios por selección, deja null.
 Responde SOLO con JSON con esta forma:
 {"stake":número o null,"odds":"texto" o null,"payout":número o null,
- "legs":[{"kind":"prop|ml|spread|total","player":"nombre completo del jugador o null","team":"equipo de esa selección (para prop, el equipo del jugador) o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate,"early":número de ventaja si dice pago anticipado o null}]}
+ "legs":[{"kind":"prop|ml|spread|total|x","m":"solo para kind x: código del mercado","pick":"team|draw|team_or_draw|no_draw o null","btts":"yes|no o null","score":"goles del equipo-goles del rival o null","parity":"odd|even o null","player":"nombre completo del jugador o null","team":"equipo de esa selección (para prop, el equipo del jugador) o null","market":"clave del mercado o null","line":número o null,"ou":"over|under|null","draw":true si es empate,"early":número de ventaja si dice pago anticipado o null}]}
+Mercados especiales (kind "x", con "m"): rt = resultado + total (ej. "PSG y más de 2.5 goles": m rt, team PSG, pick team, line 2.5, ou over; "Empate y menos de 2.5": pick draw); rb = resultado + ambos anotan (pick + btts); dc = doble oportunidad (pick team_or_draw con team, o no_draw); btts = ambos anotan (btts yes/no, team cualquiera del partido); dnb = empate no apuesta (team); wtn = gana sin recibir gol (team); cs = portería en cero (team); exs = marcador exacto (team + score desde el punto de vista de ese equipo); h1 / h2 = ganador del 1er / 2º tiempo o mitad (pick team|draw); h1t / h2t = total del 1er / 2º tiempo (line, ou); q1 / q1t = ganador / total del 1er cuarto o periodo; tt = total de un equipo (team, line, ou); corn = tiros de esquina totales (line, ou); card = tarjetas totales (line, ou); oe = total par/non (parity); nrfi = carrera en la 1ª entrada (btts yes = hay carrera, no = no hay); reg = ganador en tiempo regular de hockey (pick).
 Reglas: "prop" es estadística de un jugador (ej. "LeBron James Más de 24.5 puntos" → kind prop, market pts, line 24.5, ou over). "ml" es ganador del partido / 1X2 / línea de dinero. "spread" es hándicap o línea de puntos/carreras/goles (line con su signo, ej. -3.5). "total" es altas/bajas/más-menos del partido completo (team = el equipo local de ese partido).
 "Más de / Over / Alta / O" = over; "Menos de / Under / Baja / U" = under. "Anota TD" o "anota gol" en cualquier momento es prop con line 0.5 y ou over. Un "18+ puntos" es line 17.5 over.
 Claves de mercado por deporte:
@@ -1663,6 +1717,12 @@ function resolveClaude(data,ix){
       const market=propDef(kind,l.market)?l.market:marketFrom(kind,norm(l.market||''));if(!market){unknown.push(desc);return}
       out.push({kind:'prop',p,market,line:Number(l.line),ou:l.ou==='under'?'under':'over'})}
     else{const tm=idxTeam(ix,l.team||'');if(!tm){unknown.push(desc);return}
+      if(l.kind==='x'){const sd=tm.side==='home'?'h':'a',pk=l.pick==='draw'?'d':sd,yn=l.btts==='yes'?'y':'n',ln=l.line!=null?Number(l.line):null,ou=l.ou==='under'?'under':'over';const m=String(l.m||'');let x=null;
+        if(m==='rt'&&ln!=null)x={m,sel:pk,line:ln,ou};else if(m==='rb')x={m,sel:pk+'|'+yn};else if(m==='dc')x={m,sel:l.pick==='no_draw'?'ha':sd+'X'};else if(m==='btts'||m==='nrfi')x={m,sel:yn};
+        else if(['dnb','wtn','cs'].includes(m))x={m,sel:sd};else if(m==='exs'&&l.score){const [a,b]=String(l.score).split('-').map(Number);if(isFinite(a)&&isFinite(b))x={m,sel:tm.side==='home'?a+'-'+b:b+'-'+a}}
+        else if(['h1','h2','q1','reg'].includes(m))x={m,sel:pk};else if(['h1t','h2t','q1t','corn','card'].includes(m)&&ln!=null)x={m,line:ln,ou};
+        else if(m==='tt'&&ln!=null)x={m,side:tm.side,teamAbbr:tm.t.abbr,teamName:tm.t.name,teamColor:tm.t.color,teamLogo:tm.t.logo,line:ln,ou};else if(m==='oe')x={m,sel:l.parity==='odd'?'o':'e'};
+        if(!x){unknown.push(desc);return}out.push({kind:'x',tm,x});return}
       if(l.kind==='ml')out.push({kind:'ml',tm,draw:!!l.draw,early:l.early?(Number(l.early)||EARLY[LG[tm.g.lg].kind]):null});
       else if(l.kind==='spread'&&l.line!=null)out.push({kind:'spread',tm,line:Number(l.line)});
       else if(l.kind==='total'&&l.line!=null)out.push({kind:'total',tm,line:Number(l.line),ou:l.ou==='under'?'under':'over'});
@@ -2431,6 +2491,7 @@ const ACT={
   ttab(d){const s=S.sheet;if(s){s.ttab=d.v;renderSheet(true)}},
   trd(d){const s=S.sheet;if(s){s.trd=d.v;renderSheet(true)}},
   gtab(d){const s=S.sheet;if(s){s.gtab=d.v;renderSheet(true)}},
+  mtab(d){const s=S.sheet;if(s){s.mtab=d.v;renderSheet(true)}},
   gpl(d){const s=S.sheet;if(s){s.gp=s.gp===d.v?null:d.v;s.grd=null;renderSheet(true)}},
   grd(d){const s=S.sheet;if(s){s.grd=Number(d.v);renderSheet(true)}},
   gall(){const s=S.sheet;if(s){s.gall=1;renderSheet(true)}},
