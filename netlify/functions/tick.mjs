@@ -162,7 +162,7 @@ export default async () => {
       if (first) continue; // la primera vez solo guardamos cómo va
       // Una selección perdida = parlay caído: un solo aviso
       const newLost = rs.filter(x => x.r.st === 'lost' && x.o.st !== 'lost');
-      if (newLost.length) { const x = newLost[0]; await send(s, '💔 Se cayó ' + nm, 'Por ' + sh(x) + (val(x) ? ' (quedó en ' + val(x) + ')' : ''), P.id + ':end', ''); st.done = 1; continue; }
+      if (newLost.length) { const x = newLost[0]; await send(s, '🔴 Se cayó ' + nm, 'Por ' + sh(x) + (val(x) ? ' (quedó en ' + val(x) + ')' : ''), P.id + ':end', ''); st.done = 1; continue; }
       if (won.length === rs.length && rs.every(x => x.o.st)) { await send(s, '🎉 ¡Pegó ' + nm + '!', P.pay ? 'Cobras ' + money(P.pay) : rs.length + ' de ' + rs.length + ' selecciones', P.id + ':end', ''); st.done = 1; continue; }
       for (const x of rs) {
         if (['won', 'push'].includes(x.r.st) && !['won', 'push'].includes(x.o.st)) { const left = rs.length - won.length;
@@ -178,11 +178,10 @@ export default async () => {
         if (ht || (now - Math.max(old.sumAt || 0, old.liveAt || 0) > 30 * 60e3 && sig !== old.sumSig)) {
           const pj = x => fmt(x.r.proj < 10 ? Math.round(x.r.proj * 10) / 10 : Math.round(x.r.proj));
           const needTxt = L => L.ou === 'over' ? 'necesita ' + (Math.floor(L.line) + 1) : 'máximo ' + (Math.ceil(L.line) - 1);
-          let body;
-          if (badL.length) { const b0 = badL[0];
-            body = '⚠️ ' + sh(b0) + '\n' + (b0.r.proj != null ? 'Lleva ' + val(b0) + ', al ritmo acaba con ' + pj(b0) + ' y ' + needTxt(b0.L) : b0.r.msg);
-            if (badL.length > 1) body += '\n' + (badL.length === 2 ? 'Otra selección también va abajo' : 'Otras ' + (badL.length - 1) + ' también van abajo'); }
-          else body = 'Todo va en ruta 👍';
+          // Una línea por selección con círculo de color: 🟢 va bien · 🟡 abajo del ritmo · ✅ ya cobró · ⚪ no ha empezado
+          const dot = x => ['won', 'push'].includes(x.r.st) ? '✅' : x.r.st === 'ok' ? '🟢' : x.r.st === 'bad' ? '🟡' : x.r.st === 'live' ? '🟢' : '⚪';
+          const lines = rs.map(x => dot(x) + ' ' + sh(x) + (x.r.st === 'bad' && x.r.proj != null ? ' · va para ' + pj(x) + ', ' + needTxt(x.L) : ''));
+          const body = lines.slice(0, 4).join('\n') + (lines.length > 4 ? '\n+' + (lines.length - 4) + ' más' : '');
           await send(s, '📊 ' + nm + ': ' + ok + ' de ' + rs.length + (ok === 1 ? ' va bien' : ' van bien'), body, P.id + ':sum', '');
           st.sumAt = now; st.sumSig = sig;
         }
