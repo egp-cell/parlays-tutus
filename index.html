@@ -64,7 +64,8 @@ main::-webkit-scrollbar{display:none}
 .av>b{font-weight:700;font-size:calc(var(--s)*.33)}
 .av .ph{position:absolute;inset:0;border-radius:50%;overflow:hidden}
 .av .ph img{width:100%;height:100%;object-fit:cover;object-position:top;background:var(--surface-2)}
-.av>.tl{--s:18px;position:absolute;right:-2px;bottom:-2px;box-shadow:0 0 0 2.5px var(--surface)}
+.av>.tl{--s:20px;position:absolute;right:-4px;bottom:-3px;box-shadow:0 0 0 2.5px var(--surface)}
+.av>.tl:has(img){background:transparent;box-shadow:none;overflow:visible} .av>.tl:has(img)>b{display:none} .av>.tl img{filter:drop-shadow(0 1px 2px rgba(0,0,0,.75))}
 .duo{position:relative;width:44px;height:44px;flex:none;display:block}
 .duo .tl{--s:30px;position:absolute}
 .duo .tl:first-child{left:0;top:0} .duo .tl:last-child{right:0;bottom:0;box-shadow:0 0 0 2.5px var(--surface)}
