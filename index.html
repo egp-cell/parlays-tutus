@@ -567,7 +567,7 @@ main::-webkit-scrollbar{display:none}
 .grow:first-child{border-top:0}
 .grow:active{background:var(--surface-2)}
 .gstat{font-size:12.5px;font-weight:700;color:var(--muted);text-align:center;line-height:1.2;display:flex;flex-direction:column;align-items:center;gap:4px}
-.gstat.lv{color:var(--loss)} .gstat.lv i{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 1.4s infinite}
+.gstat.lv{color:var(--loss)} .gstat.lv .gck i{width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 1.4s infinite}
 .gtm{display:flex;flex-direction:column;gap:8px;min-width:0}
 .gtm .r{display:flex;align-items:center;gap:10px;min-width:0;height:26px}
 .gtm .tl{--s:26px} .gtm .tl b{font-size:8px}
@@ -605,6 +605,15 @@ main::-webkit-scrollbar{display:none}
 .godd b{color:var(--muted);font-weight:700} .godd i{font-style:normal}
 .gsc b.ml{font-size:12.5px;font-weight:700;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:0 7px;line-height:22px;margin:2px 0;min-width:44px;text-align:center}
 .fgs{font-style:normal;color:#FFB020;font-size:11px}
+.gstat .gck{display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1}
+.gstat .gck b{font-size:13px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.gstat .gck small{font-size:10.5px;font-weight:700;opacity:.8;white-space:nowrap}
+.gstat.lv .gck i{margin-bottom:3px}
+.gbd{display:flex;align-items:center;gap:3px;margin-top:3px}
+.gpb{font-style:normal;font-size:8.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:var(--accent);background:rgba(255,61,0,.13);padding:2px 3px;border-radius:4px;line-height:1}
+.gbd{max-width:58px}
+.gbd .fgs{font-size:10px;line-height:1}
+
 .fgb{margin-top:10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:6px 11px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .fgb svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}
 .fgb.on{color:#FFB020;border-color:rgba(255,176,32,.4);background:rgba(255,176,32,.1)} .fgb.on svg{fill:currentColor}
@@ -1380,14 +1389,25 @@ function emptyDay(lg,off){const d=dayLabel(off).toLowerCase();const k=lg==='all'
   if(k==='golf')return `<div class="empty"><h3>Sin torneo</h3><p>No hay torneo de ${esc(LG[lg].name)} en juego ${d}.</p></div>`;
   if(k==='tennis')return `<div class="empty"><h3>Sin partidos de tenis</h3><p>No hay partidos de ${esc(LG[lg].short||LG[lg].name)} para ${d}.</p></div>`;
   return `<div class="empty"><h3>Sin partidos</h3><p>No hay juegos ${lg==='all'?'':'de '+esc(LG[lg].name)+' '}para ${d}.</p></div>`}
+function liveClk(g){const d=String(g.detail||'').trim();const ord=n=>n;let m;
+  const P={quarter:'C',period:'P',half:'T',inning:'E'};
+  const two=(a,b)=>`<span class="gck"><i></i><b>${esc(a)}</b>${b?`<small>${esc(b)}</small>`:''}</span>`;
+  if(/half\s*-?time|^ht$|medio/i.test(d))return two('Medio','tiempo');
+  if(m=d.match(/^end of (?:the )?(\d)(?:st|nd|rd|th)\s+(quarter|period|half|inning)/i))return two('Fin',m[1]+P[m[2].toLowerCase()]);
+  if(m=d.match(/^(\d{1,2}:\d{2}(?:\.\d)?)\s*-\s*(\d)(?:st|nd|rd|th)\s+(quarter|period|half)/i))return two(m[1],m[2]+P[m[3].toLowerCase()]);
+  if(m=d.match(/^(\d{1,2}:\d{2})\s*-\s*(\d*)\s*OT/i))return two(m[1],(m[2]||'')+'TE');
+  if(m=d.match(/^(top|bot(?:tom)?|mid(?:dle)?|end)\s+(?:of\s+)?(?:the\s+)?(\d+)/i)){const k=m[1].toLowerCase();return two((k==='top'?'▲':k.startsWith('bot')?'▼':k.startsWith('mid')?'Mitad':'Fin')+' '+m[2],'entrada')}
+  if(/^(1st|2nd) half$/i.test(d))return two(d[0]+'T','');
+  return two(d.length>9?d.slice(0,9):d,'')}
 function gameRow(g){if(g.type==='event')return eventCard(g);if(LG[g.lg]?.kind==='tennis')return tennisRow(g);
   const mine=S.parlays.some(p=>!p.settled&&p.legs.some(l=>l.key===g.key));const pre=g.state==='pre',live=g.state==='in';
   const lo=(t,o)=>g.state==='post'&&t.score<o.score?'lo':'';
-  const st=live?`<span class="gstat lv"><i></i>${esc(g.detail)}</span>`:pre?`<span class="gstat">${esc(hhmm(g.date))}</span>`:`<span class="gstat">${/final|ft|terminado/i.test(g.detail||'')?'Final':esc(g.detail||'Final')}</span>`;
+  const bd=(isFavG(g.key)?'<em class="fgs">★</em>':'')+(mine?'<em class="gpb">Parlay</em>':'');const bdh=bd?`<span class="gbd">${bd}</span>`:'';
+  const st=live?`<span class="gstat lv">${liveClk(g)}${bdh}</span>`:pre?`<span class="gstat"><span class="gck"><b>${esc(hhmm(g.date))}</b></span>${bdh}</span>`:`<span class="gstat"><span class="gck"><b>${/final|ft|terminado/i.test(g.detail||'')?'Final':esc(g.detail||'Final')}</b></span>${bdh}</span>`;
   const row=(t,o)=>`<span class="r">${logo(t,26)}<b class="${lo(t,o)}">${esc(t.name)}</b>${isFav(g.lg,t.id)?'<em>★</em>':''}</span>`;
   const od=g.odds||{},ml=od.ml||{};const hasMl=pre&&(ml.a||ml.h);const soc=LG[g.lg]?.kind==='soccer';
   const ol=pre?[soc&&ml.d?`Empate <b>${esc(ml.d)}</b>`:'',!soc&&od.details?esc(od.details):'',od.total!=null?`O/U <b>${esc(od.total)}</b>`:''].filter(Boolean).join('<i>·</i>'):'';
-  return `<button class="grow ${mine?'mine':''} ${live?'live':''}" data-a="openGame" data-k="${g.key}">${st.replace('</span>',isFavG(g.key)?'<em class="fgs">★</em></span>':'</span>')}<span class="gtm">${row(g.away,g.home)}${row(g.home,g.away)}</span><span class="gsc">${pre?(hasMl?`<b class="ml">${esc(ml.a||'–')}</b><b class="ml">${esc(ml.h||'–')}</b>`:''):`<b class="${lo(g.away,g.home)}">${g.away.score}</b><b class="${lo(g.home,g.away)}">${g.home.score}</b>`}</span>${ol?`<span class="godd">${ol}</span>`:''}${mine?'<span class="gpl">Parlay</span>':''}</button>`}
+  return `<button class="grow ${mine?'mine':''} ${live?'live':''}" data-a="openGame" data-k="${g.key}">${st}<span class="gtm">${row(g.away,g.home)}${row(g.home,g.away)}</span><span class="gsc">${pre?(hasMl?`<b class="ml">${esc(ml.a||'–')}</b><b class="ml">${esc(ml.h||'–')}</b>`:''):`<b class="${lo(g.away,g.home)}">${g.away.score}</b><b class="${lo(g.home,g.away)}">${g.home.score}</b>`}</span>${ol?`<span class="godd">${ol}</span>`:''}</button>`}
 function histRow(p){const r=p.settled.result,n=(p.settled.payout||0)-p.stake;const d=new Date(p.settled.at).toLocaleDateString('es-MX',{day:'numeric',month:'short'});
   const hit=p.legs.filter(l=>l.final?.status==='won').length;
   return `<button class="hrow" data-a="openParlay" data-id="${p.id}"><span class="ic" style="--c:var(--${r==='won'?'win':'loss'})">${r==='won'?'✓':'✕'}</span><span class="n">${esc(p.name)}</span>
@@ -2149,7 +2169,7 @@ function sheetPlayer(s){const c=S.ath[s.lg+':'+s.pid]||{};const a=c.a;const L=LG
     const my=[];S.parlays.filter(p=>!p.settled).forEach(P=>P.legs.forEach(Lg=>{if(Lg.type==='prop'&&String(Lg.athleteId)===String(s.pid))my.push({P,L:Lg})}));
     if(my.length)h+=`<span class="flabel">En tus parlays</span><div class="pc mine"><div class="legs">${my.map(({P,L:Lg})=>legView(Lg,evalLeg(Lg),P.id)).join('')}</div></div>`;
     // este partido
-    if(s.k){const g=S.ev[s.k]&&S.ev[s.k].g;let it=null,head='';
+    let it=null;if(s.k){const g=S.ev[s.k]&&S.ev[s.k].g;let head='';
       if(kind==='soccer'){const d=S.det[s.k]&&S.det[s.k].j;let p=null;(d&&d.rosters||[]).forEach(r=>(r.roster||[]).forEach(x=>{if(String(x.athlete&&x.athlete.id)===s.pid)p=x}));
         if(p&&p.stats&&p.stats.length){const v=k=>{const x=p.stats.find(y=>y.name===k);return x?x.value:0};const pl=p.plays||[];const inn=p.subbedIn?(pl.find(x=>x.substitution)?.clock?.displayValue||''):'',out=p.subbedOut?(pl.find(x=>x.substitution)?.clock?.displayValue||''):'';
           it=[['Goles',v('totalGoals')],['Asist.',v('goalAssists')],['Tiros',v('totalShots')],['A puerta',v('shotsOnTarget')],...(v('saves')?[['Atajadas',v('saves')]]:[['Faltas',v('foulsCommitted')]]),['Tarjetas',v('yellowCards')+v('redCards')]];head=p.starter?'Titular':inn?'Entró '+inn:'En la banca';if(out)head+=' · salió '+out}}
@@ -2225,7 +2245,7 @@ function tnSets(p,o,live,per){return p.sets.map((x,i)=>{const y=o.sets[i];const 
 function tennisRow(g){const pre=g.state==='pre',live=g.state==='in',post=g.state==='post';
   const st=live?`<span class="tst lv"><i></i>${esc(g.detail)}</span>`:pre?`<span class="tst">${esc(hhmm(g.date))}</span>`:`<span class="tst">${esc(g.detail)}</span>`;
   const row=(p,o)=>`<span class="tpl ${post&&!p.win?'lo':''}">${pface(p.head,p.full,28,p.flag)}<span class="tnm"><b>${esc(p.name)}</b>${p.seed?`<small>(${esc(p.seed)})</small>`:''}${live&&p.serve?'<em class="srv" title="Saca"></em>':''}${post&&p.win?'<em class="wk">✓</em>':''}</span><span class="sets">${pre?'':tnSets(p,o,live,g.period)}</span></span>`;
-  return `<button class="tnr ${live?'live':''}" data-a="openGame" data-k="${g.key}">${st.replace('</span>',isFavG(g.key)?'<em class="fgs">★</em></span>':'</span>')}<span class="tnp">${row(g.away,g.home)}${row(g.home,g.away)}</span>${g.court&&!post?`<span class="tct">${esc(g.court)}</span>`:''}</button>`}
+  return `<button class="tnr ${live?'live':''}" data-a="openGame" data-k="${g.key}">${st}<span class="tnp">${row(g.away,g.home)}${row(g.home,g.away)}</span>${g.court&&!post?`<span class="tct">${esc(g.court)}</span>`:''}</button>`}
 function lgListHtml(id,list){if(LG[id].kind==='golf'||LG[id].kind==='racing')return list.map(gameRow).join('');if(LG[id].kind!=='tennis')return '<div class="glist">'+list.map(gameRow).join('')+'</div>';
   const gs=new Map();list.forEach(g=>{const k=g.tour+'|'+g.round;if(!gs.has(k))gs.set(k,{t:g.tour,r:g.round,i:g.rIdx,l:[]});gs.get(k).l.push(g)});
   return [...gs.values()].sort((a,b)=>(a.t<b.t?-1:a.t>b.t?1:0)||b.i-a.i).map(x=>`<div class="tnsub"><b>${esc(x.t)}</b><span>${esc(x.r)}</span></div><div class="glist">${x.l.map(gameRow).join('')}</div>`).join('')}
